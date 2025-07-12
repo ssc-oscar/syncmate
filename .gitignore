@@ -1,0 +1,16 @@
+# Ignore Go build artifacts
+bin/
+pkg/
+*.exe
+*.test
+*.out
+# Ignore Go module files
+vendor/
+go.sum
+# Ignore Go coverage files
+*.coverprofile
+*.coverage
+# Ignore Go cache files
+*.cache
+
+./offsetfs
