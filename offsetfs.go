@@ -438,7 +438,7 @@ func main() {
 	var (
 		debug      = flag.Bool("debug", false, "enable debug output")
 		configFile = flag.String("config", "", "path to JSONL configuration file")
-		allowOther = flag.Bool("allow-other", false, "allow other users to access the filesystem")
+		// allowOther = flag.Bool("allow-other", false, "allow other users to access the filesystem")
 	)
 	flag.Parse()
 
@@ -479,9 +479,9 @@ func main() {
 		},
 	}
 
-	if *allowOther {
-		mountOptions.AllowOther = true
-	}
+	// if *allowOther {
+	// 	mountOptions.AllowOther = true
+	// }
 
 	// 在macOS上添加推荐选项
 	mountOptions.FsName = "offsetfs"
