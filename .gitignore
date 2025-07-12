@@ -4,9 +4,6 @@ pkg/
 *.exe
 *.test
 *.out
-# Ignore Go module files
-vendor/
-go.sum
 # Ignore Go coverage files
 *.coverprofile
 *.coverage
