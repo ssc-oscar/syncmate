@@ -1,5 +1,5 @@
 // offsetfs.go
-package main
+package offsetfs
 
 import (
 	"bufio"
