@@ -13,11 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux]
-        goarch: [amd64, arm64]
-        exclude:
-          - goos: windows
-            goarch: arm64
+        include:
+          - goos: linux
+            goarch: amd64
+            cc: gcc
+            cgo: 1
+          # 暂时移除 ARM64 构建，避免交叉编译复杂性
+          # - goos: linux
+          #   goarch: arm64
+          #   cc: aarch64-linux-gnu-gcc
+          #   cgo: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -27,8 +32,7 @@ jobs:
       with:
         go-version: 1.24.x
 
-    - name: Install dependencies (Linux only)
-      if: matrix.goos == 'linux'
+    - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y fuse libfuse-dev
@@ -37,12 +41,9 @@ jobs:
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 1
+        CGO_ENABLED: ${{ matrix.cgo }}
+        CC: ${{ matrix.cc }}
       run: |
-        if [ "${{ matrix.goos }}" != "linux" ]; then
-          export CGO_ENABLED=0
-        fi
-        
         BINARY_NAME="offsetfs-${{ matrix.goos }}-${{ matrix.goarch }}"
         if [ "${{ matrix.goos }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
