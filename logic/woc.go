@@ -23,9 +23,6 @@ type WocFile struct {
 
 // WocObject represents a base object with sharding information.
 type WocObject struct {
-	// Name of the map, e.g. 'c2p', 'c2r', 'P2c'.
-	Name string `json:"name"`
-
 	// Number of bits used for sharding.
 	ShardingBits int `json:"sharding_bits"`
 
@@ -35,17 +32,21 @@ type WocObject struct {
 
 // WocMap represents a map object that extends WocObject.
 type WocMap struct {
-	WocObject
-
 	// Version of the map, e.g. 'R', 'U'.
 	Version string `json:"version"`
+
+	// Number of bits used for sharding.
+	ShardingBits int `json:"sharding_bits"`
+
+	// List of shard files.
+	Shards []WocFile `json:"shards"`
 
 	// Large files associated with the map.
 	Larges map[string]WocFile `json:"larges"`
 
 	// Data types of the map, e.g. ["h", "cs"], ["h", "hhwww"].
 	// Use a fixed-length array for correct JSON unmarshalling.
-	DTypes [2]string `json:"dtypes"`
+	DTypes []string `json:"dtypes"`
 }
 
 // WocProfile represents the main configuration structure for WoC.
@@ -76,20 +77,26 @@ func ParseWocProfile(profilePath *string) (*ParsedWocProfile, error) {
 		return nil, err
 	}
 
+	// print profile for debugging
+	fmt.Printf("Parsed WocProfile: %+v\n", profile)
+
 	var parsedProfile ParsedWocProfile = ParsedWocProfile{
 		Maps:    make(map[string]WocMap),
 		Objects: make(map[string]WocObject),
 	}
 	// Set the Name field for each object based on the map key
 	for name, obj := range profile.Objects {
-		obj.Name = name
 		profile.Objects[name] = obj
+	}
+	// assert the length of the maps
+	if len(profile.Maps) == 0 {
+		return nil, fmt.Errorf("no maps found in profile")
 	}
 
 	// pick the map entry with the latest version
 	for name, maps := range profile.Maps {
 		if len(maps) == 0 {
-			continue
+			panic(fmt.Errorf("no maps found for name %s", name))
 		}
 		latestMap := maps[0]
 		for _, m := range maps {
@@ -118,7 +125,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			panic(fmt.Errorf("shard size is nil for file %s", file.Path))
 		}
 		if file.Digest == nil {
-			res, err := SampleMD5(file.Path, nil, nil)
+			res, err := SampleMD5(file.Path, 0, 0)
 			if err == nil {
 				file.Digest = &res.Digest
 			} else {
@@ -204,13 +211,19 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 				continue
 			}
 			oldShard := oldMap.Shards[i]
-			var oldShardSizePtr *int64
-			if oldShard.Size != nil {
-				size64 := int64(*oldShard.Size)
-				oldShardSizePtr = &size64
+			partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
+			if oldShard.Size == nil || oldShard.Digest == nil || *oldShard.Digest == "" {
+				panic(fmt.Errorf("the digest was not found in profile for shard %s", shard.Path))
 			}
-			partialMd5, err := SampleMD5(shard.Path, nil, oldShardSizePtr)
-			if partialMd5.Digest != *oldShard.Digest || err != nil {
+			if *oldShard.Size > *shard.Size {
+				panic(fmt.Errorf("source file %s size %d is smaller than destination file %s size %d",
+					shard.Path, *shard.Size, oldShard.Path, *oldShard.Size))
+			}
+			if err != nil {
+				// print the name of the shard and the error
+				panic(fmt.Sprintf("failed to calculate digest for shard %s: %v\n", shard.Path, err))
+			}
+			if partialMd5.Digest != *oldShard.Digest {
 				addFullCopyTask(shard)
 			} else {
 				addPartialCopyTask(shard, oldShard)

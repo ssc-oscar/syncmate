@@ -23,7 +23,7 @@ type SampleMD5Result struct {
 //   - size: The size of the considered portion
 //   - digest: The 16-character MD5 digest
 //   - error: Any error encountered during processing
-func SampleMD5(filePath string, skip *int64, size *int64) (*SampleMD5Result, error) {
+func SampleMD5(filePath string, skip int64, size int64) (*SampleMD5Result, error) {
 	// Get file size
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
@@ -33,14 +33,14 @@ func SampleMD5(filePath string, skip *int64, size *int64) (*SampleMD5Result, err
 
 	// Determine the size to consider
 	var actualSize int64
-	if size == nil {
-		actualSize = fsize - *skip
+	if size <= 0 {
+		actualSize = fsize - skip
 	} else {
-		actualSize = *size
+		actualSize = size
 	}
 
 	// Validate parameters
-	if *skip+actualSize > fsize {
+	if skip+actualSize > fsize {
 		return nil, fmt.Errorf("supplied size %dB > file size %dB", actualSize, fsize)
 	}
 
@@ -56,7 +56,7 @@ func SampleMD5(filePath string, skip *int64, size *int64) (*SampleMD5Result, err
 
 	// Hash all bytes if file is small
 	if actualSize <= 4096 { // typical block size of ext4
-		_, err = file.Seek(*skip, io.SeekStart)
+		_, err = file.Seek(skip, io.SeekStart)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +81,7 @@ func SampleMD5(filePath string, skip *int64, size *int64) (*SampleMD5Result, err
 	numChunks := (actualSize - 256) / chunkSize // don't hash the same bytes twice
 
 	// Seek to start position and read first 128 bytes
-	_, err = file.Seek(*skip, io.SeekStart)
+	_, err = file.Seek(skip, io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func SampleMD5(filePath string, skip *int64, size *int64) (*SampleMD5Result, err
 	}
 
 	// Hash last 128 bytes
-	_, err = file.Seek(*skip+actualSize-128, io.SeekStart)
+	_, err = file.Seek(skip+actualSize-128, io.SeekStart)
 	if err != nil {
 		return nil, err
 	}

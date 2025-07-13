@@ -3,52 +3,51 @@ package logic
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 )
 
 func TestParseWocProfile(t *testing.T) {
-	testFile := "/Users/hrz/Documents/GitHub/offsetfs/woc_local.json"
-	file, err := os.Open(testFile)
+	testFile := "woc.src.json"
+	profile, err := ParseWocProfile(&testFile)
 	if err != nil {
-		t.Fatalf("Failed to open test file: %v", err)
+		t.Fatalf("Failed to parse WocProfile: %v", err)
 	}
-	defer file.Close()
-
-	var profile WocProfile
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&profile)
-	if err != nil {
-		t.Fatalf("Failed to decode JSON: %v", err)
-	}
-
 	if len(profile.Maps) == 0 {
-		t.Error("Expected non-empty Maps in WocProfile")
+		t.Fatal("Parsed WocProfile has no maps")
 	}
-
 	if len(profile.Objects) == 0 {
-		t.Error("Expected non-empty Objects in WocProfile")
+		t.Fatal("Parsed WocProfile has no objects")
 	}
-
-	fmt.Printf("Parsed WocProfile: %+v\n", profile)
+	// print the parsed profile for debugging
+	for name, obj := range profile.Objects {
+		fmt.Printf("Object: %s, Name: %s", name, obj.Shards[0].Path)
+	}
+	for name, m := range profile.Maps {
+		fmt.Printf("Map: %s, Version: %s, Shards: %d\n", name, m.Version, len(m.Shards))
+		for _, shard := range m.Shards {
+			fmt.Printf("  Shard: Path: %s, Size: %d, Digest: %s\n", shard.Path, shard.Size, *shard.Digest)
+		}
+	}
 }
 
 func TestGenerateFileList(t *testing.T) {
-	srcPath := "/Users/hrz/Documents/GitHub/offsetfs/woc_local.json"
-	dstPath := "/Users/hrz/Documents/GitHub/offsetfs/woc_remote.json"
+	srcPath := "woc.src.json"
+	dstPath := "woc.dst.json"
 	// Assuming ParseWocProfile is a function that reads and parses the WocProfile from a file
-	dstProfile, err := ParseWocProfile(&srcPath)
+	dstProfile, err := ParseWocProfile(&dstPath)
 	if err != nil {
 		t.Fatalf("Failed to parse destination profile: %v", err)
 	}
-	srcProfile, err := ParseWocProfile(&dstPath)
+	srcProfile, err := ParseWocProfile(&srcPath)
 	if err != nil {
 		t.Fatalf("Failed to parse source profile: %v", err)
 	}
 
 	fileList := GenerateFileLists(dstProfile, srcProfile)
-	// print the file list for debugging
-	for path, task := range fileList {
-		fmt.Printf("File: %s, Source Digest: %s, Target Digest: %s\n", path, *task.SourceDigest, *task.TargetDigest)
+	// dump the file list to json
+	jsonData, err := json.MarshalIndent(fileList, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal file list: %v", err)
 	}
+	fmt.Printf("Generated File List:\n%s\n", jsonData)
 }
