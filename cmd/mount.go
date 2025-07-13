@@ -6,13 +6,10 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	of "github.com/hrz6976/syncmate/offsetfs"
 	"github.com/spf13/cobra"
-	"github.com/winfsp/cgofuse/fuse"
 )
 
 // LoadConfigs 从JSONL文件加载配置
@@ -48,7 +45,7 @@ func LoadConfigs(configPath string) (map[string]*of.FileConfig, error) {
 			return nil, fmt.Errorf("failed to parse line %d: %v", lineNum, err)
 		}
 
-		if err := of.ValidateConfig(&config); err != nil {
+		if err := of.ValidateConfig(&config, false); err != nil {
 			return nil, fmt.Errorf("invalid config at line %d: %v", lineNum, err)
 		}
 
@@ -57,8 +54,8 @@ func LoadConfigs(configPath string) (map[string]*of.FileConfig, error) {
 		}
 
 		configs[config.VirtualPath] = &config
-		log.Printf("Loaded config: %s -> %s (offset=%d, size=%d, readonly=%v)",
-			config.VirtualPath, config.SourcePath, config.Offset, config.Size, config.ReadOnly)
+		log.Printf("Loaded config: %s -> %s (offset=%d, size=%d)",
+			config.VirtualPath, config.SourcePath, config.Offset, config.Size)
 	}
 
 	if len(configs) == 0 {
@@ -68,74 +65,16 @@ func LoadConfigs(configPath string) (map[string]*of.FileConfig, error) {
 	return configs, nil
 }
 
-func MountCGO(mountpoint string, configFile *string, debug bool, allowOther bool) error {
-	// 加载配置
-	configs, err := LoadConfigs(*configFile)
-	if err != nil {
-		log.Fatalf("Failed to load configurations: %v", err)
-	}
-
-	log.Printf("Loaded %d file configurations", len(configs))
-
-	// 创建文件系统实例
-	filesystem := of.NewOffsetFS(configs)
-
-	// 设置挂载选项
-	options := []string{
-		"-o", "fsname=offsetfs",
-		"-o", "volname=OffsetFS",
-	}
-
-	if allowOther {
-		options = append(options, "-o", "allow_other")
-	}
-
-	if debug {
-		options = append(options, "-d")
-	}
-
-	// 添加挂载点
-	fmt.Printf("OffsetFS (CGO) mounted on %s\n", mountpoint)
-	fmt.Printf("Available files:\n")
-	for virtualPath, config := range configs {
-		fmt.Printf("  %s -> %s (offset=%d, size=%d, readonly=%v)\n",
-			virtualPath, config.SourcePath, config.Offset, config.Size, config.ReadOnly)
-	}
-	fmt.Printf("Use Ctrl-C to unmount.\n")
-
-	// 设置信号处理
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		fmt.Println("\nUnmounting...")
-		os.Exit(0)
-	}()
-
-	// 挂载文件系统
-	host := fuse.NewFileSystemHost(filesystem)
-	if host.Mount(mountpoint, options) != true {
-		return fmt.Errorf("failed to mount filesystem at %s", mountpoint)
-	}
-	return nil
-}
-
 var mountCmd = &cobra.Command{
-	Use:   "mount",
+	Use:   "mount [mountpoint]",
 	Short: "Mount the OffsetFS file system",
 	Long:  `Mounts the OffsetFS file system, with offsets and sizes defined in a JSONL configuration file.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 {
-			log.Fatal("Usage: syncmate mount [options] MOUNTPOINT\n" +
-				"Options:\n" +
-				"  -config string    Path to JSONL configuration file (required)\n" +
-				"  -debug           Enable debug output\n" +
-				"  -allow-other     Allow other users to access the filesystem")
-		}
 		mountpoint := args[0]
 		configFile := cmd.Flag("config").Value.String()
 		debug := cmd.Flag("debug").Value.String() == "true"
 		allowOther := cmd.Flag("allow-other").Value.String() == "true"
+		readOnly := cmd.Flag("readonly").Value.String() == "true"
 		if configFile == "" {
 			log.Fatal("Configuration file is required. Use -config flag.")
 		}
@@ -147,7 +86,19 @@ var mountCmd = &cobra.Command{
 		} else {
 			log.SetFlags(log.LstdFlags)
 		}
-		err := MountCGO(mountpoint, &configFile, debug, allowOther)
+		// 加载配置
+		configs, err := LoadConfigs(configFile)
+		if err != nil {
+			log.Fatalf("Failed to load configurations: %v", err)
+		}
+		log.Printf("Loaded %d file configurations", len(configs))
+		err = of.MountOffsetFS(of.MountOptions{
+			Mountpoint: mountpoint,
+			Configs:    configs,
+			Debug:      debug,
+			AllowOther: allowOther,
+			ReadOnly:   readOnly,
+		})
 		if err != nil {
 			log.Fatalf("%v", err)
 		}
@@ -155,8 +106,10 @@ var mountCmd = &cobra.Command{
 }
 
 func init() {
+	mountCmd.Args = cobra.ExactArgs(1)
 	mountCmd.Flags().StringP("config", "c", "", "Path to JSONL configuration file (required)")
 	mountCmd.Flags().BoolP("debug", "d", false, "Enable debug output")
 	mountCmd.Flags().BoolP("allow-other", "a", false, "Allow other users to access the filesystem")
+	mountCmd.Flags().BoolP("readonly", "r", false, "Mount the filesystem in read-only mode")
 	RootCmd.AddCommand(mountCmd)
 }

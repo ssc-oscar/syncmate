@@ -64,7 +64,6 @@ type FileConfig struct {
     SourcePath  string `json:"source_path"`  // Path to the source file
     Offset      int64  `json:"offset"`       // Offset in the source file (bytes)
     Size        int64  `json:"size"`         // Size limit (0 = no limit)
-    ReadOnly    bool   `json:"read_only"`    // Read-only flag
 }
 ```
 
@@ -72,7 +71,7 @@ type FileConfig struct {
 
 ```go
 // Create a new filesystem instance
-fs := cgofs.NewOffsetFS(configs)
+fs := cgofs.NewOffsetFS(configs, false) // false = read-write mode, true = read-only mode
 
 // Load configuration from file
 configs, err := cgofs.LoadConfigs("config.jsonl")

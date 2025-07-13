@@ -1,4 +1,4 @@
-package rcopt
+package logic
 
 import (
 	"context"

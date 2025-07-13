@@ -50,7 +50,6 @@ func TestFileConfig_Validation(t *testing.T) {
 				SourcePath:  testFile,
 				Offset:      0,
 				Size:        0,
-				ReadOnly:    false,
 			},
 			wantError: false,
 		},
@@ -61,7 +60,6 @@ func TestFileConfig_Validation(t *testing.T) {
 				SourcePath:  testFile,
 				Offset:      0,
 				Size:        0,
-				ReadOnly:    false,
 			},
 			wantError: true,
 		},
@@ -72,7 +70,6 @@ func TestFileConfig_Validation(t *testing.T) {
 				SourcePath:  "",
 				Offset:      0,
 				Size:        0,
-				ReadOnly:    false,
 			},
 			wantError: true,
 		},
@@ -83,7 +80,6 @@ func TestFileConfig_Validation(t *testing.T) {
 				SourcePath:  testFile,
 				Offset:      -1,
 				Size:        0,
-				ReadOnly:    false,
 			},
 			wantError: true,
 		},
@@ -94,7 +90,6 @@ func TestFileConfig_Validation(t *testing.T) {
 				SourcePath:  testFile,
 				Offset:      0,
 				Size:        -1,
-				ReadOnly:    false,
 			},
 			wantError: true,
 		},
@@ -105,7 +100,6 @@ func TestFileConfig_Validation(t *testing.T) {
 				SourcePath:  testFile,
 				Offset:      0,
 				Size:        0,
-				ReadOnly:    false,
 			},
 			wantError: true,
 		},
@@ -113,7 +107,7 @@ func TestFileConfig_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateConfig(&tt.config)
+			err := ValidateConfig(&tt.config, false) // 使用默认的非只读模式进行测试
 			if (err != nil) != tt.wantError {
 				t.Errorf("ValidateConfig() error = %v, wantError %v", err, tt.wantError)
 			}
@@ -133,28 +127,24 @@ func TestOffsetFS_Getattr(t *testing.T) {
 			SourcePath:  testFile,
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    true,
 		},
 		"offset.txt": {
 			VirtualPath: "offset.txt",
 			SourcePath:  testFile,
 			Offset:      7,
 			Size:        0,
-			ReadOnly:    true,
 		},
 		"sized.txt": {
 			VirtualPath: "sized.txt",
 			SourcePath:  testFile,
 			Offset:      0,
 			Size:        10,
-			ReadOnly:    true,
 		},
 		"offset_sized.txt": {
 			VirtualPath: "offset_sized.txt",
 			SourcePath:  testFile,
 			Offset:      7,
 			Size:        5,
-			ReadOnly:    true,
 		},
 	}
 
@@ -185,7 +175,7 @@ func TestOffsetFS_Getattr(t *testing.T) {
 		},
 	}
 
-	fs := NewOffsetFS(configs)
+	fs := NewOffsetFS(configs, false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -216,28 +206,24 @@ func TestOffsetFS_Read(t *testing.T) {
 			SourcePath:  testFile,
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    true,
 		},
 		"offset.txt": {
 			VirtualPath: "offset.txt",
 			SourcePath:  testFile,
 			Offset:      5,
 			Size:        0,
-			ReadOnly:    true,
 		},
 		"sized.txt": {
 			VirtualPath: "sized.txt",
 			SourcePath:  testFile,
 			Offset:      0,
 			Size:        15,
-			ReadOnly:    true,
 		},
 		"limited.txt": {
 			VirtualPath: "limited.txt",
 			SourcePath:  testFile,
 			Offset:      0,
 			Size:        10,
-			ReadOnly:    true,
 		},
 	}
 
@@ -283,7 +269,7 @@ func TestOffsetFS_Read(t *testing.T) {
 		},
 	}
 
-	fs := NewOffsetFS(configs)
+	fs := NewOffsetFS(configs, false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -323,40 +309,29 @@ func TestOffsetFS_Write(t *testing.T) {
 	createTestFile(t, testFile, testContent)
 
 	configs := map[string]*FileConfig{
-		"readonly.txt": {
-			VirtualPath: "readonly.txt",
-			SourcePath:  testFile,
-			Offset:      0,
-			Size:        0,
-			ReadOnly:    true,
-		},
 		"direct.txt": {
 			VirtualPath: "direct.txt",
 			SourcePath:  filepath.Join(tmpDir, "write_test1.txt"),
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    false,
 		},
 		"offset.txt": {
 			VirtualPath: "offset.txt",
 			SourcePath:  filepath.Join(tmpDir, "write_test2.txt"),
 			Offset:      5,
 			Size:        0,
-			ReadOnly:    false,
 		},
 		"sized.txt": {
 			VirtualPath: "sized.txt",
 			SourcePath:  filepath.Join(tmpDir, "write_test3.txt"),
 			Offset:      0,
 			Size:        10,
-			ReadOnly:    false,
 		},
 		"sized_exceed.txt": {
 			VirtualPath: "sized_exceed.txt",
 			SourcePath:  filepath.Join(tmpDir, "write_test4.txt"),
 			Offset:      0,
 			Size:        3,
-			ReadOnly:    false,
 		},
 	}
 
@@ -369,14 +344,6 @@ func TestOffsetFS_Write(t *testing.T) {
 		checkContent  bool
 		expectedAfter string
 	}{
-		{
-			name:         "write to readonly file",
-			path:         "/readonly.txt",
-			writeOffset:  0,
-			writeData:    "HELLO",
-			expectedCode: -fuse.EACCES,
-			checkContent: false,
-		},
 		{
 			name:          "direct write",
 			path:          "/direct.txt",
@@ -414,7 +381,7 @@ func TestOffsetFS_Write(t *testing.T) {
 		},
 	}
 
-	fs := NewOffsetFS(configs)
+	fs := NewOffsetFS(configs, false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -465,11 +432,10 @@ func TestOffsetFS_FileCreation(t *testing.T) {
 			SourcePath:  newFile,
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    false,
 		},
 	}
 
-	fs := NewOffsetFS(configs)
+	fs := NewOffsetFS(configs, false)
 
 	// 打开文件
 	retcode, _ := fs.Open("/new.txt", fuse.O_RDWR)
@@ -518,18 +484,16 @@ func TestOffsetFS_Readdir(t *testing.T) {
 			SourcePath:  testFile1,
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    false,
 		},
 		"file2.txt": {
 			VirtualPath: "file2.txt",
 			SourcePath:  testFile2,
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    true,
 		},
 	}
 
-	fs := NewOffsetFS(configs)
+	fs := NewOffsetFS(configs, false)
 
 	// 测试根目录列举
 	var entries []string
@@ -594,11 +558,10 @@ func BenchmarkOffsetFS_Read(b *testing.B) {
 			SourcePath:  testFile,
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    true,
 		},
 	}
 
-	fs := NewOffsetFS(configs)
+	fs := NewOffsetFS(configs, false)
 	buff := make([]byte, 4096) // 4KB buffer
 
 	b.ResetTimer()
@@ -623,11 +586,10 @@ func BenchmarkOffsetFS_Write(b *testing.B) {
 			SourcePath:  testFile,
 			Offset:      0,
 			Size:        0,
-			ReadOnly:    false,
 		},
 	}
 
-	fs := NewOffsetFS(configs)
+	fs := NewOffsetFS(configs, false)
 	data := []byte("benchmark data for writing")
 
 	b.ResetTimer()
@@ -635,4 +597,56 @@ func BenchmarkOffsetFS_Write(b *testing.B) {
 		offset := int64(i * len(data))
 		fs.Write("/writable.txt", data, offset, 0)
 	}
+}
+
+func TestReadOnlyFileSystem(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	testFile := filepath.Join(tmpDir, "readonly_test.txt")
+	createTestFile(t, testFile, "Read-only test content")
+
+	configs := map[string]*FileConfig{
+		"readonly.txt": {
+			VirtualPath: "readonly.txt",
+			SourcePath:  testFile,
+			Offset:      0,
+			Size:        0,
+		},
+	}
+
+	// 创建只读文件系统
+	fs := NewOffsetFS(configs, true)
+
+	// 测试读取操作应该成功
+	buff := make([]byte, 100)
+	bytesRead := fs.Read("/readonly.txt", buff, 0, 0)
+	if bytesRead < 0 {
+		t.Errorf("Read from read-only filesystem failed: %v", bytesRead)
+	}
+
+	expectedContent := "Read-only test content"
+	actualContent := string(buff[:bytesRead])
+	if actualContent != expectedContent {
+		t.Errorf("Read content = %q, want %q", actualContent, expectedContent)
+	}
+
+	// 测试写入操作应该失败
+	writeData := []byte("This should fail")
+	result := fs.Write("/readonly.txt", writeData, 0, 0)
+	if result != -fuse.EACCES {
+		t.Errorf("Write to read-only filesystem should fail with EACCES, got %d", result)
+	}
+
+	// 测试以写入模式打开应该失败
+	retcode, _ := fs.Open("/readonly.txt", fuse.O_WRONLY)
+	if retcode != -fuse.EACCES {
+		t.Errorf("Open read-only file for writing should fail with EACCES, got %d", retcode)
+	}
+
+	// 测试截断操作应该失败
+	result = fs.Truncate("/readonly.txt", 10, 0)
+	if result != -fuse.EACCES {
+		t.Errorf("Truncate on read-only filesystem should fail with EACCES, got %d", result)
+	}
+
+	t.Log("Read-only filesystem test completed successfully")
 }

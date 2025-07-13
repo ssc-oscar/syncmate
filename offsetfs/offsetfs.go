@@ -5,9 +5,11 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/winfsp/cgofuse/fuse"
@@ -19,20 +21,21 @@ type FileConfig struct {
 	SourcePath  string `json:"source_path"`  // 源文件路径
 	Offset      int64  `json:"offset"`       // 从源文件的偏移量开始
 	Size        int64  `json:"size"`         // 要映射的字节数，0表示到文件末尾
-	ReadOnly    bool   `json:"read_only"`    // 是否启用只读模式
 }
 
 // OffsetFS 实现了 cgofuse.FileSystemInterface
 type OffsetFS struct {
 	fuse.FileSystemBase
-	configs map[string]*FileConfig
-	mu      sync.RWMutex
+	configs  map[string]*FileConfig
+	readOnly bool
+	mu       sync.RWMutex
 }
 
 // NewOffsetFS 创建一个新的 OffsetFS 实例
-func NewOffsetFS(configs map[string]*FileConfig) *OffsetFS {
+func NewOffsetFS(configs map[string]*FileConfig, readOnly bool) *OffsetFS {
 	return &OffsetFS{
-		configs: configs,
+		configs:  configs,
+		readOnly: readOnly,
 	}
 }
 
@@ -64,10 +67,9 @@ func (fs *OffsetFS) Getattr(path string, stat *fuse.Stat_t, fh uint64) int {
 	// 获取源文件信息
 	sourceInfo, err := os.Stat(config.SourcePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// 文件不存在，但我们可能会创建它
+		if os.IsNotExist(err) { // 文件不存在，但我们可能会创建它
 			stat.Mode = fuse.S_IFREG | 0644
-			if config.ReadOnly {
+			if fs.readOnly {
 				stat.Mode = fuse.S_IFREG | 0444
 			}
 			stat.Size = 0
@@ -83,7 +85,7 @@ func (fs *OffsetFS) Getattr(path string, stat *fuse.Stat_t, fh uint64) int {
 	}
 
 	// 设置文件模式
-	if config.ReadOnly {
+	if fs.readOnly {
 		stat.Mode = fuse.S_IFREG | 0444
 	} else {
 		stat.Mode = fuse.S_IFREG | 0644
@@ -166,7 +168,7 @@ func (fs *OffsetFS) Open(path string, flags int) (int, uint64) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 文件不存在
-			if config.ReadOnly {
+			if fs.readOnly {
 				return -fuse.ENOENT, ^uint64(0)
 			}
 			// 在写入模式下，我们稍后创建文件
@@ -176,7 +178,7 @@ func (fs *OffsetFS) Open(path string, flags int) (int, uint64) {
 	}
 
 	// 检查访问权限
-	if config.ReadOnly && (flags&fuse.O_WRONLY != 0 || flags&fuse.O_RDWR != 0) {
+	if fs.readOnly && (flags&fuse.O_WRONLY != 0 || flags&fuse.O_RDWR != 0) {
 		return -fuse.EACCES, ^uint64(0)
 	}
 
@@ -255,7 +257,7 @@ func (fs *OffsetFS) Write(path string, buff []byte, ofst int64, fh uint64) int {
 	}
 
 	// 检查是否为只读模式
-	if config.ReadOnly {
+	if fs.readOnly {
 		log.Printf("Cannot write to file in read-only mode: %s", path)
 		return -fuse.EACCES
 	}
@@ -314,12 +316,12 @@ func (fs *OffsetFS) Write(path string, buff []byte, ofst int64, fh uint64) int {
 
 // Truncate 截断文件
 func (fs *OffsetFS) Truncate(path string, size int64, fh uint64) int {
-	config, exists := fs.getFileConfig(path)
+	_, exists := fs.getFileConfig(path)
 	if !exists {
 		return -fuse.ENOENT
 	}
 
-	if config.ReadOnly {
+	if fs.readOnly {
 		return -fuse.EACCES
 	}
 
@@ -334,7 +336,7 @@ func (fs *OffsetFS) Utimens(path string, tmsp []fuse.Timespec) int {
 		return -fuse.ENOENT
 	}
 
-	if config.ReadOnly {
+	if fs.readOnly {
 		return -fuse.EACCES
 	}
 
@@ -360,12 +362,12 @@ func min(a, b int64) int64 {
 }
 
 // ValidateConfig 验证配置
-func ValidateConfig(config *FileConfig) error {
+func ValidateConfig(config *FileConfig, readOnly bool) error {
 	if config.SourcePath == "" {
 		return fmt.Errorf("source_path cannot be empty")
 	}
 
-	if !config.ReadOnly {
+	if !readOnly {
 		parentDir := filepath.Dir(config.SourcePath)
 		if err := os.MkdirAll(parentDir, 0755); err != nil {
 			return fmt.Errorf("cannot create parent directory for %s: %v", config.SourcePath, err)
@@ -388,5 +390,62 @@ func ValidateConfig(config *FileConfig) error {
 		return fmt.Errorf("virtual_path cannot contain path separators: %s", config.VirtualPath)
 	}
 
+	return nil
+}
+
+type MountOptions struct {
+	Mountpoint string
+	Configs    map[string]*FileConfig
+	Debug      bool
+	AllowOther bool
+	ReadOnly   bool
+}
+
+func MountOffsetFS(opt MountOptions) error {
+	// 创建文件系统实例
+	filesystem := NewOffsetFS(opt.Configs, opt.ReadOnly)
+
+	// 设置挂载选项
+	options := []string{
+		"-o", "fsname=offsetfs",
+		"-o", "volname=OffsetFS",
+	}
+
+	if opt.AllowOther {
+		options = append(options, "-o", "allow_other")
+	}
+
+	if opt.Debug {
+		options = append(options, "-d")
+	}
+
+	// 添加挂载点
+	fmt.Printf("OffsetFS (CGO) mounted on %s\n", opt.Mountpoint)
+	fmt.Printf("Available files:\n")
+	for virtualPath, config := range opt.Configs {
+		fmt.Printf("  %s -> %s (offset=%d, size=%d)\n",
+			virtualPath, config.SourcePath, config.Offset, config.Size)
+	}
+	fmt.Printf("Use Ctrl-C to unmount.\n")
+	if opt.ReadOnly {
+		fmt.Printf("Filesystem is mounted in READ-ONLY mode.\n")
+	} else {
+		fmt.Printf("Filesystem is mounted in READ-WRITE mode.\n")
+	}
+
+	// 设置信号处理
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		fmt.Println("\nUnmounting...")
+		os.Exit(0)
+	}()
+
+	// 挂载文件系统
+	host := fuse.NewFileSystemHost(filesystem)
+	if !host.Mount(opt.Mountpoint, options) {
+		return fmt.Errorf("failed to mount filesystem at %s", opt.Mountpoint)
+	}
 	return nil
 }
