@@ -1,4 +1,4 @@
-package logic
+package util
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/hrz6976/syncmate/logger"
 	of "github.com/hrz6976/syncmate/offsetfs" // Assuming offsetfs is the package where WocFile, WocObject, WocMap, and WocProfile are defined
 )
 
@@ -77,9 +78,6 @@ func ParseWocProfile(profilePath *string) (*ParsedWocProfile, error) {
 		return nil, err
 	}
 
-	// print profile for debugging
-	fmt.Printf("Parsed WocProfile: %+v\n", profile)
-
 	var parsedProfile ParsedWocProfile = ParsedWocProfile{
 		Maps:    make(map[string]WocMap),
 		Objects: make(map[string]WocObject),
@@ -88,16 +86,9 @@ func ParseWocProfile(profilePath *string) (*ParsedWocProfile, error) {
 	for name, obj := range profile.Objects {
 		profile.Objects[name] = obj
 	}
-	// assert the length of the maps
-	if len(profile.Maps) == 0 {
-		return nil, fmt.Errorf("no maps found in profile")
-	}
 
 	// pick the map entry with the latest version
 	for name, maps := range profile.Maps {
-		if len(maps) == 0 {
-			panic(fmt.Errorf("no maps found for name %s", name))
-		}
 		latestMap := maps[0]
 		for _, m := range maps {
 			if m.Version > latestMap.Version {
@@ -213,11 +204,14 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			oldShard := oldMap.Shards[i]
 			partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
 			if oldShard.Size == nil || oldShard.Digest == nil || *oldShard.Digest == "" {
+				logger.Error(fmt.Sprintf("the digest was not found in profile for shard %s", shard.Path))
 				panic(fmt.Errorf("the digest was not found in profile for shard %s", shard.Path))
 			}
 			if *oldShard.Size > *shard.Size {
-				panic(fmt.Errorf("source file %s size %d is smaller than destination file %s size %d",
+				logger.Warn(fmt.Sprintf("source file %s size %d is smaller than destination file %s size %d",
 					shard.Path, *shard.Size, oldShard.Path, *oldShard.Size))
+				addFullCopyTask(shard)
+				continue
 			}
 			if err != nil {
 				// print the name of the shard and the error
