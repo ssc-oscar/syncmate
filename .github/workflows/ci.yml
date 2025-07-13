@@ -16,7 +16,8 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          sudo apt-get update && apt-get install -y fuse libfuse-dev
+          sudo apt-get update
+          sudo apt-get install -y fuse libfuse-dev
 
       - uses: actions/checkout@v4
 
@@ -103,12 +104,11 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY_NAME="${BINARY_NAME}.exe"
           fi
-          
+
           go build -v -ldflags="-s -w \
             -X 'main.BUILD_TIME=${BUILD_TIME}' \
             -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
             -o "${BINARY_NAME}" .
-
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
