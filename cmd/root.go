@@ -7,16 +7,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Version string
-var BuildTime string
-var CommitHash string
-
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use:   "syncmate",
 	Short: "Src -[S3]-> Dst",
 	Long: `SyncMate is a tool for incrementally synchronizing files between a source and destination, 
 using S3 as the transfer medium.`,
+	Version: "<unknown>",
+	// Uncomment the following line if your bare application
+	// has an action associated with it:
+	//	Run: func(cmd *cobra.Command, args []string) { },
+	// Disable the default help command
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },
