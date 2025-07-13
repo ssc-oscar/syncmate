@@ -103,8 +103,8 @@ func ParseWocProfile(profilePath *string) (*ParsedWocProfile, error) {
 
 type WocSyncTask struct {
 	of.FileConfig
-	SourceDigest *string // Source file digest for verification
-	TargetDigest *string // Target file digest for verification
+	SourceDigest *string `json:"source_digest,omitempty"` // Source file digest for verification
+	TargetDigest *string `json:"target_digest,omitempty"` // Target file digest for verification
 }
 
 // produce file lists by comparing two WocProfile objects
@@ -140,8 +140,8 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 				Offset:      0,
 				Size:        int64(*srcFile.Size),
 			},
-			SourceDigest: srcFile.Digest,
-			TargetDigest: nil, // Target digest does not matter
+			SourceDigest: srcFile.Digest, // Source digest for verification
+			TargetDigest: nil,            // Target digest does not matter
 		}
 	}
 
@@ -151,7 +151,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			panic(fmt.Errorf("shard size is nil for file %s", srcFile.Path))
 		}
 		if *srcFile.Size < *dstFile.Size {
-			print(fmt.Errorf("source file %s size %d is smaller than destination file %s size %d",
+			logger.Warn(fmt.Sprintf("source file %s size %d is smaller than destination file %s size %d",
 				srcFile.Path, *srcFile.Size, dstFile.Path, *dstFile.Size))
 			return
 		}
@@ -163,17 +163,16 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			if dstFile.Digest == nil {
 				calcDigests(dstFile)
 			}
-
-			fileList[virtualPath] = &WocSyncTask{
-				FileConfig: of.FileConfig{
-					VirtualPath: virtualPath,
-					SourcePath:  srcFile.Path, // Assuming we take the first shard as source
-					Offset:      int64(*dstFile.Size),
-					Size:        int64(*srcFile.Size) - int64(*dstFile.Size),
-				},
-				SourceDigest: srcFile.Digest,
-				TargetDigest: nil, // Target digest does not matter
-			}
+		}
+		fileList[virtualPath] = &WocSyncTask{
+			FileConfig: of.FileConfig{
+				VirtualPath: virtualPath,
+				SourcePath:  srcFile.Path, // Assuming we take the first shard as source
+				Offset:      int64(*dstFile.Size),
+				Size:        int64(*srcFile.Size) - int64(*dstFile.Size),
+			},
+			SourceDigest: srcFile.Digest,
+			TargetDigest: dstFile.Digest,
 		}
 	}
 
@@ -218,6 +217,8 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 				panic(fmt.Sprintf("failed to calculate digest for shard %s: %v\n", shard.Path, err))
 			}
 			if partialMd5.Digest != *oldShard.Digest {
+				logger.Warn(fmt.Sprintf("Partial MD5 mismatch for shard %s: %s != %s",
+					shard.Path, partialMd5.Digest, *oldShard.Digest))
 				addFullCopyTask(shard)
 			} else {
 				addPartialCopyTask(shard, oldShard)
