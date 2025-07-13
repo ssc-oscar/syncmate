@@ -97,13 +97,24 @@ jobs:
           CGO_ENABLED: ${{ matrix.cgo }}
           CC: ${{ matrix.cc }}
         run: |
-          go build -v -ldflags="-s -w" -o offsetfs-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
+          COMMIT_HASH_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          BINARY_NAME="syncmate-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          
+          go build -v -ldflags="-s -w \
+            -X 'main.BUILD_TIME=${BUILD_TIME}' \
+            -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
+            -o "${BINARY_NAME}" .
+
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: offsetfs-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: offsetfs-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          name: syncmate-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: syncmate-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
   lint:
     runs-on: ubuntu-latest

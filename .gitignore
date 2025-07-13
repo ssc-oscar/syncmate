@@ -10,4 +10,4 @@ pkg/
 # Ignore Go cache files
 *.cache
 
-./offsetfs
+./syncmate

@@ -18,11 +18,10 @@ jobs:
             goarch: amd64
             cc: gcc
             cgo: 1
-          # 暂时移除 ARM64 构建，避免交叉编译复杂性
-          # - goos: linux
-          #   goarch: arm64
-          #   cc: aarch64-linux-gnu-gcc
-          #   cgo: 1
+          - goos: linux
+            goarch: arm64
+            cc: aarch64-linux-gnu-gcc
+            cgo: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -44,25 +43,25 @@ jobs:
         CGO_ENABLED: ${{ matrix.cgo }}
         CC: ${{ matrix.cc }}
       run: |
-        BINARY_NAME="offsetfs-${{ matrix.goos }}-${{ matrix.goarch }}"
+        VERSION="${{ github.ref_name }}"
+        COMMIT_HASH_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+        BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        BINARY_NAME="syncmate-${{ matrix.goos }}-${{ matrix.goarch }}"
         if [ "${{ matrix.goos }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
         fi
         
-        go build -v -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o "${BINARY_NAME}" .
-        
-        # Create archive
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          zip "${BINARY_NAME%.exe}.zip" "${BINARY_NAME}" README.md
-        else
-          tar -czf "${BINARY_NAME}.tar.gz" "${BINARY_NAME}" README.md
-        fi
+        go build -v -ldflags="-s -w \
+          -X 'main.VERSION=${VERSION}' \
+          -X 'main.BUILD_TIME=${BUILD_TIME}' \
+          -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
+          -o "${BINARY_NAME}" .
 
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          offsetfs-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.zip' || '.tar.gz' }}
+          syncmate-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
         generate_release_notes: true
         draft: false
         prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
