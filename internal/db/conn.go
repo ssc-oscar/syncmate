@@ -20,12 +20,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	apiToken = os.Getenv("API_TOKEN")
-	accountId = os.Getenv("ACCOUNT_ID")
-	datebaseId = os.Getenv("DATABASE_ID")
+	apiToken := os.Getenv("API_TOKEN")
+	accountId := os.Getenv("ACCOUNT_ID")
+	datebaseId := os.Getenv("DATABASE_ID")
 
-	defaultDSN = fmt.Sprintf("d1://%s:%s@%s", accountId, apiToken, datebaseId)
-	invalidDSN = fmt.Sprintf("d1://%s:%s@%s", accountId, "errToken", datebaseId)
+	defaultDSN := fmt.Sprintf("d1://%s:%s@%s", accountId, apiToken, datebaseId)
 
 	d1.TraceOn(os.Stdout)
 
@@ -40,7 +39,7 @@ func TestMain(m *testing.M) {
 		},
 	)
 
-	gdb, err = gorm.Open(gormd1.Open(defaultDSN), &gorm.Config{
+	gdb, err := gorm.Open(gormd1.Open(defaultDSN), &gorm.Config{
 		SkipDefaultTransaction:                   true,
 		DisableForeignKeyConstraintWhenMigrating: true,
 		Logger:                                   newLogger,
@@ -49,7 +48,5 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	exitCode := m.Run()
-
-	os.Exit(exitCode)
+	return gdb
 }

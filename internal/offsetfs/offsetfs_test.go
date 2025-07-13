@@ -1,4 +1,4 @@
-package offsetfs_test
+package offsetfs
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-
-	"github.com/hrz6976/offsetfs/internal/offsetfs" // 引入nodefs以支持macOS上的FUSE
 )
 
 // 测试用的临时目录
@@ -46,12 +44,12 @@ func TestFileConfig_Validation(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		config    offsetfs.FileConfig
+		config    FileConfig
 		wantError bool
 	}{
 		{
 			name: "valid config",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "valid.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -62,7 +60,7 @@ func TestFileConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "empty virtual path",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -73,7 +71,7 @@ func TestFileConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "empty source path",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "test.txt",
 				SourcePath:  "",
 				Offset:      0,
@@ -84,7 +82,7 @@ func TestFileConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "negative offset",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "test.txt",
 				SourcePath:  testFile,
 				Offset:      -1,
@@ -95,7 +93,7 @@ func TestFileConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "negative size",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "test.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -106,7 +104,7 @@ func TestFileConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "virtual path with slash",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "path/test.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -135,12 +133,12 @@ func TestOffsetFileNode_Getattr(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		config     offsetfs.FileConfig
+		config     FileConfig
 		expectSize uint64
 	}{
 		{
 			name: "direct access",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "test.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -151,7 +149,7 @@ func TestOffsetFileNode_Getattr(t *testing.T) {
 		},
 		{
 			name: "offset access",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "test.txt",
 				SourcePath:  testFile,
 				Offset:      7,
@@ -162,7 +160,7 @@ func TestOffsetFileNode_Getattr(t *testing.T) {
 		},
 		{
 			name: "sized access",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "test.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -173,7 +171,7 @@ func TestOffsetFileNode_Getattr(t *testing.T) {
 		},
 		{
 			name: "offset and sized",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "test.txt",
 				SourcePath:  testFile,
 				Offset:      7,
@@ -210,7 +208,7 @@ func TestOffsetFileNode_Read(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		config        offsetfs.FileConfig
+		config        FileConfig
 		readOffset    int64
 		readSize      int
 		expectedData  string
@@ -218,7 +216,7 @@ func TestOffsetFileNode_Read(t *testing.T) {
 	}{
 		{
 			name: "direct read from start",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "direct.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -232,7 +230,7 @@ func TestOffsetFileNode_Read(t *testing.T) {
 		},
 		{
 			name: "offset read",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "offset.txt",
 				SourcePath:  testFile,
 				Offset:      5,
@@ -246,7 +244,7 @@ func TestOffsetFileNode_Read(t *testing.T) {
 		},
 		{
 			name: "sized read",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "sized.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -260,7 +258,7 @@ func TestOffsetFileNode_Read(t *testing.T) {
 		},
 		{
 			name: "read beyond virtual file",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "limited.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -303,7 +301,7 @@ func TestOffsetFileNode_Write(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		config        offsetfs.FileConfig
+		config        FileConfig
 		writeOffset   int64
 		writeData     string
 		expectedErrno int
@@ -312,7 +310,7 @@ func TestOffsetFileNode_Write(t *testing.T) {
 	}{
 		{
 			name: "write to readonly file",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "readonly.txt",
 				SourcePath:  testFile,
 				Offset:      0,
@@ -326,7 +324,7 @@ func TestOffsetFileNode_Write(t *testing.T) {
 		},
 		{
 			name: "direct write",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "direct.txt",
 				SourcePath:  filepath.Join(tmpDir, "write_test1.txt"),
 				Offset:      0,
@@ -341,7 +339,7 @@ func TestOffsetFileNode_Write(t *testing.T) {
 		},
 		{
 			name: "offset write",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "offset.txt",
 				SourcePath:  filepath.Join(tmpDir, "write_test2.txt"),
 				Offset:      5,
@@ -355,7 +353,7 @@ func TestOffsetFileNode_Write(t *testing.T) {
 		},
 		{
 			name: "sized write within limit",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "sized.txt",
 				SourcePath:  filepath.Join(tmpDir, "write_test3.txt"),
 				Offset:      0,
@@ -370,7 +368,7 @@ func TestOffsetFileNode_Write(t *testing.T) {
 		},
 		{
 			name: "sized write exceeding limit",
-			config: offsetfs.FileConfig{
+			config: FileConfig{
 				VirtualPath: "sized_exceed.txt",
 				SourcePath:  filepath.Join(tmpDir, "write_test4.txt"),
 				Offset:      0,
@@ -425,7 +423,7 @@ func TestOffsetFileNode_FileCreation(t *testing.T) {
 		t.Fatalf("Test file should not exist initially")
 	}
 
-	config := &offsetfs.FileConfig{
+	config := &FileConfig{
 		VirtualPath: "new.txt",
 		SourcePath:  newFile,
 		Offset:      0,
@@ -604,7 +602,7 @@ func TestSimpleFileOperations(t *testing.T) {
 	}
 
 	// 创建配置
-	config := &offsetfs.FileConfig{
+	config := &FileConfig{
 		VirtualPath: "test.txt",
 		SourcePath:  sourceFile,
 		Offset:      0,
@@ -693,9 +691,16 @@ func TestMountWithMinimalOptions(t *testing.T) {
 	}
 
 	// 配置
-	configs := map[string]*offsetfs.FileConfig{
+	configs := map[string]*FileConfig{
 		"minimal.txt": {
 			VirtualPath: "minimal.txt",
+			SourcePath:  sourceFile,
+			Offset:      0,
+			Size:        0,
+			ReadOnly:    false,
+		},
+		"towrite.txt": {
+			VirtualPath: "towrite.txt",
 			SourcePath:  sourceFile,
 			Offset:      0,
 			Size:        0,
@@ -739,8 +744,8 @@ func TestMountWithMinimalOptions(t *testing.T) {
 		t.Fatalf("Failed to list files: %v", err)
 	}
 
-	if len(entries) != 1 || entries[0].Name() != "minimal.txt" {
-		t.Fatalf("Expected one file 'minimal.txt', got: %v", entries)
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 files, got %d", len(entries))
 	}
 
 	// 测试读取
@@ -752,6 +757,14 @@ func TestMountWithMinimalOptions(t *testing.T) {
 
 	if string(readContent) != content {
 		t.Errorf("Read content = %q, want %q", string(readContent), content)
+	}
+
+	// 测试写入
+	writeFile := filepath.Join(mountpoint, "towrite.txt")
+	writeContent := "New content for writing"
+	err = os.WriteFile(writeFile, []byte(writeContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write to virtual file: %v", err)
 	}
 
 	t.Log("Minimal mount test passed!")

@@ -474,7 +474,7 @@ func main() {
 		Debug: *debug,
 		// 在 macOS 上添加必要的权限选项
 		Options: []string{
-			"default_permissions", // 使用默认权限检查
+			"defer_permissions", // 假设所有权限均存在
 		},
 	}
 
