@@ -42,3 +42,14 @@ func ConnectDB(p CloudflareD1Credentials) (*gorm.DB, error) {
 	}
 	return gdb, nil
 }
+
+func CloseDB(db *gorm.DB) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get sql.DB from gorm.DB: %w", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		return fmt.Errorf("failed to close database connection: %w", err)
+	}
+	return nil
+}

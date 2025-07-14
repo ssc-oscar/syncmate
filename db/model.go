@@ -25,11 +25,13 @@ type Task struct {
 	/* SrcSize is the size of the file in the transfer source. */
 	SrcSize int64 `gorm:"not null"`
 	/* SrcDigest is the sample_md5 digest of the file in the transfer source. */
-	SrcDigest string `gorm:"not null"`
+	SrcDigest string `gorm:"nullable"`
 	/* DstPath is the path of the file in the transfer destination. */
 	DstPath string `gorm:"not null"`
 	/* DstSize is the size of the file in the transfer destination. */
 	DstSize int64 `gorm:"not null"`
+	/* DstDigest is the sample_md5 digest of the file in the transfer destination. */
+	DstDigest string `gorm:"nullable"`
 	/* Status is the status of the task. */
 	Status Status `gorm:"not null"`
 	/* Error is the error message of the task. */

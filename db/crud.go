@@ -68,6 +68,14 @@ func (db *DB) ListTasks(offset, limit int) ([]*Task, error) {
 	return tasks, nil
 }
 
+func (db *DB) ListFinishedVirtualPaths() ([]string, error) {
+	var paths []string
+	if err := db.getConnection().Model(&Task{}).Where("status = ?", Downloaded).Pluck("virtual_path", &paths).Error; err != nil {
+		return nil, err
+	}
+	return paths, nil
+}
+
 func (db *DB) CountTasks() (int64, error) {
 	var count int64
 	if err := db.getConnection().Model(&Task{}).Count(&count).Error; err != nil {
