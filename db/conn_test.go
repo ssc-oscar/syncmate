@@ -34,7 +34,7 @@ func SetupD1DB() (*gorm.DB, error) {
 		fmt.Println("Config file not found, using SQLite for testing")
 		return SetupSQLiteDB()
 	}
-	
+
 	creds := SetupCredentials(configPath)
 	db, err := ConnectDB(creds)
 	if err != nil {
@@ -51,12 +51,12 @@ func SetupSQLiteDB() (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to SQLite database: %w", err)
 	}
-	
+
 	// Auto migrate the Task model
 	if err := db.AutoMigrate(&Task{}); err != nil {
 		return nil, fmt.Errorf("failed to auto migrate Task model: %w", err)
 	}
-	
+
 	fmt.Println("SQLite database connection established successfully")
 	return db, nil
 }

@@ -9,14 +9,14 @@ func SetupDBInstance(t *testing.T) *DB {
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
-	
+
 	// For SQLite, we don't need to drop tables as we use in-memory database
 	// For D1, we drop the test table if it exists
 	if err := db.Exec("DROP TABLE IF EXISTS tasks").Error; err != nil {
 		// Ignore error for SQLite in-memory database
 		t.Logf("Note: Could not drop test table (this is normal for in-memory databases): %v", err)
 	}
-	
+
 	dbInstance := NewDB(db)
 	if dbInstance.getConnection() == nil {
 		t.Fatal("Expected DB connection to be non-nil")
