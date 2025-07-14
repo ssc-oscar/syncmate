@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/hrz6976/syncmate/util"
+	"github.com/hrz6976/syncmate/woc"
 	"github.com/spf13/cobra"
 )
 
-func writeFileListToJSONL(fileList map[string]*util.WocSyncTask, outputPath string) error {
+func writeFileListToJSONL(fileList map[string]*woc.WocSyncTask, outputPath string) error {
 	// if outputPath is empty, use stdout
 	var file *os.File
 	if outputPath == "" {
@@ -48,19 +48,19 @@ var taskCmd = &cobra.Command{
 			return
 		}
 
-		srcProfile, err := util.ParseWocProfile(&srcPath)
+		srcProfile, err := woc.ParseWocProfile(&srcPath)
 		if err != nil {
 			cmd.PrintErrf("Failed to parse source profile: %v\n", err)
 			return
 		}
 
-		dstProfile, err := util.ParseWocProfile(&dstPath)
+		dstProfile, err := woc.ParseWocProfile(&dstPath)
 		if err != nil {
 			cmd.PrintErrf("Failed to parse destination profile: %v\n", err)
 			return
 		}
 
-		fileList := util.GenerateFileLists(dstProfile, srcProfile)
+		fileList := woc.GenerateFileLists(dstProfile, srcProfile)
 
 		if err := writeFileListToJSONL(fileList, outputPath); err != nil {
 			cmd.PrintErrf("Failed to write file list to %s: %v\n", outputPath, err)

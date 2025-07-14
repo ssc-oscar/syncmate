@@ -6,21 +6,21 @@ import (
 	"os"
 	"time"
 
-	d1 "github.com/intmian/mian_go_lib/fork/d1_gorm_adapter"
-	"github.com/intmian/mian_go_lib/fork/d1_gorm_adapter/gormd1"
-	_ "github.com/intmian/mian_go_lib/fork/d1_gorm_adapter/stdlib"
+	d1 "github.com/hrz6976/syncmate/d1_gorm_adapter"
+	"github.com/hrz6976/syncmate/d1_gorm_adapter/gormd1"
+	_ "github.com/hrz6976/syncmate/d1_gorm_adapter/stdlib"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-type ConnectProps struct {
-	apiToken   string
-	accountId  string
-	databaseId string
+type CloudflareD1Credentials struct {
+	APIToken   string `json:"api_token"`
+	DatabaseID string `json:"database_id"`
+	AccountID  string `json:"account_id"`
 }
 
-func ConnectDB(p ConnectProps) (*gorm.DB, error) {
-	defaultDSN := fmt.Sprintf("d1://%s:%s@%s", p.accountId, p.apiToken, p.databaseId)
+func ConnectDB(p CloudflareD1Credentials) (*gorm.DB, error) {
+	defaultDSN := fmt.Sprintf("d1://%s:%s@%s", p.AccountID, p.APIToken, p.DatabaseID)
 	d1.TraceOn(os.Stdout)
 	newLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
@@ -40,6 +40,5 @@ func ConnectDB(p ConnectProps) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-
 	return gdb, nil
 }

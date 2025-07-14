@@ -1,4 +1,4 @@
-package util
+package woc
 
 import (
 	"encoding/json"
@@ -116,11 +116,14 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			panic(fmt.Errorf("shard size is nil for file %s", file.Path))
 		}
 		if file.Digest == nil {
+			logger.Debug("calculating file sample md5", "path", file.Path, "skip", 0, "size", int64(*file.Size))
 			res, err := SampleMD5(file.Path, 0, 0)
 			if err == nil {
 				file.Digest = &res.Digest
 			} else {
-				panic(fmt.Errorf("the digest was not found in profile and failed to calculate for file %s: %v", file.Path, err))
+				logger.Error("failed to calculate sample md5, were the profiles generated with --with-digest?",
+					"path", file.Path, "error", err)
+				panic(err)
 			}
 		}
 	}
@@ -202,6 +205,8 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			}
 			oldShard := oldMap.Shards[i]
 			partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
+			// debug print
+			logger.Debug("Calculating part sample md5", "path", shard.Path, "skip", 0, "size", int64(*oldShard.Size))
 			if oldShard.Size == nil || oldShard.Digest == nil || *oldShard.Digest == "" {
 				logger.Error(fmt.Sprintf("the digest was not found in profile for shard %s", shard.Path))
 				panic(fmt.Errorf("the digest was not found in profile for shard %s", shard.Path))
@@ -213,11 +218,11 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 				continue
 			}
 			if err != nil {
-				// print the name of the shard and the error
-				panic(fmt.Sprintf("failed to calculate digest for shard %s: %v\n", shard.Path, err))
+				logger.Error("failed to calculate part md5", "file", shard.Path, "error", err)
+				panic(err)
 			}
 			if partialMd5.Digest != *oldShard.Digest {
-				logger.Warn(fmt.Sprintf("Partial MD5 mismatch for shard %s: %s != %s",
+				logger.Warn(fmt.Sprintf("partial MD5 mismatch for shard %s: %s != %s",
 					shard.Path, partialMd5.Digest, *oldShard.Digest))
 				addFullCopyTask(shard)
 			} else {

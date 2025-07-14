@@ -48,7 +48,7 @@ func (db *DB) UpdateTask(task *Task) error {
 }
 
 func (db *DB) DeleteTask(virtualPath string) error {
-	if err := db.conn.Delete(&Task{}, virtualPath).Error; err != nil {
+	if err := db.conn.Where("virtual_path = ?", virtualPath).Delete(&Task{}).Error; err != nil {
 		return err
 	}
 	return nil
@@ -72,5 +72,11 @@ func (db *DB) CountTasks() (int64, error) {
 
 // NewDB creates a new DB instance with the given gorm.DB connection
 func NewDB(conn *gorm.DB) *DB {
+	if conn == nil {
+		panic("gorm.DB connection cannot be nil")
+	}
+	if err := conn.AutoMigrate(&Task{}); err != nil {
+		panic("failed to auto migrate Task model: " + err.Error())
+	}
 	return &DB{conn: conn}
 }

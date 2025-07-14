@@ -34,6 +34,4 @@ type Task struct {
 	Status Status `gorm:"not null"`
 	/* Error is the error message of the task. */
 	Error string `gorm:"type:text"`
-	/* CreatedAt is the time when the task was created. */
-	CreatedAt int64 `gorm:"not null"`
 }

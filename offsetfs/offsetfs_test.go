@@ -8,7 +8,7 @@ import (
 	"github.com/winfsp/cgofuse/fuse"
 )
 
-// 测试用的临时目录
+// FileConfig represents the configuration for a file in the offset filesystem.
 func setupTestDir(t *testing.T) string {
 	tmpDir, err := os.MkdirTemp("", "cgofs_test_*")
 	if err != nil {
@@ -20,7 +20,7 @@ func setupTestDir(t *testing.T) string {
 	return tmpDir
 }
 
-// 创建测试文件
+// createTestFile creates a test file with the given content.
 func createTestFile(t *testing.T, path string, content string) {
 	err := os.MkdirAll(filepath.Dir(path), 0755)
 	if err != nil {
@@ -107,7 +107,7 @@ func TestFileConfig_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateConfig(&tt.config, false) // 使用默认的非只读模式进行测试
+			err := ValidateConfig(&tt.config, false) // false for read-only mode
 			if (err != nil) != tt.wantError {
 				t.Errorf("ValidateConfig() error = %v, wantError %v", err, tt.wantError)
 			}
@@ -385,10 +385,10 @@ func TestOffsetFS_Write(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// 首先打开文件
+			// Open the file for writing
 			retcode, _ := fs.Open(tt.path, fuse.O_RDWR)
 			if retcode != 0 && tt.expectedCode >= 0 {
-				// 对于预期成功的操作，打开失败是错误
+				// If the expected operation is a write, opening the file should succeed
 				t.Errorf("Open() failed with code %v", retcode)
 				return
 			}
@@ -401,8 +401,8 @@ func TestOffsetFS_Write(t *testing.T) {
 			}
 
 			if tt.expectedCode > 0 && tt.checkContent {
-				// 验证写入的内容
-				config := configs[tt.path[1:]] // 移除前导斜杠
+				// Check the content of the written file
+				config := configs[tt.path[1:]] // Remove leading slash
 				content, err := os.ReadFile(config.SourcePath)
 				if err != nil {
 					t.Errorf("Failed to read written file: %v", err)
@@ -421,7 +421,7 @@ func TestOffsetFS_FileCreation(t *testing.T) {
 	tmpDir := setupTestDir(t)
 	newFile := filepath.Join(tmpDir, "new_file.txt")
 
-	// 确保文件不存在
+	// Ensure the file does not exist before the test
 	if _, err := os.Stat(newFile); !os.IsNotExist(err) {
 		t.Fatalf("Test file should not exist initially")
 	}
@@ -437,7 +437,7 @@ func TestOffsetFS_FileCreation(t *testing.T) {
 
 	fs := NewOffsetFS(configs, false)
 
-	// 打开文件
+	//
 	retcode, _ := fs.Open("/new.txt", fuse.O_RDWR)
 	if retcode != 0 {
 		t.Errorf("Open() failed with code %v", retcode)

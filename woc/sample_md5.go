@@ -1,12 +1,10 @@
-package util
+package woc
 
 import (
 	"crypto/md5"
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/hrz6976/syncmate/logger"
 )
 
 type SampleMD5Result struct {
@@ -26,9 +24,6 @@ type SampleMD5Result struct {
 //   - digest: The 16-character MD5 digest
 //   - error: Any error encountered during processing
 func SampleMD5(filePath string, skip int64, size int64) (*SampleMD5Result, error) {
-	// debug print
-	logger.Debug("Calculating sample md5", "filePath", filePath, "skip", skip, "size", size)
-
 	// Get file size
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {

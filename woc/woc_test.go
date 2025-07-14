@@ -1,4 +1,4 @@
-package util
+package woc
 
 import (
 	"encoding/json"

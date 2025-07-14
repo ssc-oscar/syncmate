@@ -1,4 +1,4 @@
-package logic
+package rclone
 
 import (
 	"context"
