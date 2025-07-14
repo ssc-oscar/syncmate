@@ -6,6 +6,7 @@ import (
 
 // DBOperation defines the interface for database operations
 type DBOperation interface {
+	getConnection() *gorm.DB
 	// CreateTask creates a new task in the database.
 	CreateTask(task *Task) error
 	// GetTask retrieves a task by its ID.
@@ -25,8 +26,12 @@ type DB struct {
 	conn *gorm.DB
 }
 
+func (db *DB) getConnection() *gorm.DB {
+	return db.conn
+}
+
 func (db *DB) CreateTask(task *Task) error {
-	if err := db.conn.Create(task).Error; err != nil {
+	if err := db.getConnection().Create(task).Error; err != nil {
 		return err
 	}
 	return nil
@@ -34,29 +39,30 @@ func (db *DB) CreateTask(task *Task) error {
 
 func (db *DB) GetTask(virtualPath string) (*Task, error) {
 	var task Task
-	if err := db.conn.First(&task, virtualPath).Error; err != nil {
+	if err := db.getConnection().Where("virtual_path = ?", virtualPath).First(&task).Error; err != nil {
 		return nil, err
 	}
 	return &task, nil
 }
 
 func (db *DB) UpdateTask(task *Task) error {
-	if err := db.conn.Save(task).Error; err != nil {
+	if err := db.getConnection().Save(task).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (db *DB) DeleteTask(virtualPath string) error {
-	if err := db.conn.Where("virtual_path = ?", virtualPath).Delete(&Task{}).Error; err != nil {
+	if err := db.getConnection().Where("virtual_path = ?", virtualPath).Delete(&Task{}).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
+// ListTasks retrieves all tasks with pagination. It will not return tasks that have been deleted.
 func (db *DB) ListTasks(offset, limit int) ([]*Task, error) {
 	var tasks []*Task
-	if err := db.conn.Offset(offset).Limit(limit).Find(&tasks).Error; err != nil {
+	if err := db.getConnection().Offset(offset).Limit(limit).Find(&tasks).Error; err != nil {
 		return nil, err
 	}
 	return tasks, nil
@@ -64,7 +70,7 @@ func (db *DB) ListTasks(offset, limit int) ([]*Task, error) {
 
 func (db *DB) CountTasks() (int64, error) {
 	var count int64
-	if err := db.conn.Model(&Task{}).Count(&count).Error; err != nil {
+	if err := db.getConnection().Model(&Task{}).Count(&count).Error; err != nil {
 		return 0, err
 	}
 	return count, nil

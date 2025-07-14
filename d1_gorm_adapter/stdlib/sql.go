@@ -183,7 +183,19 @@ func (r *Rows) Next(dest []driver.Value) (err error) {
 			dest[i] = row[i].(int64)
 		case string:
 			sv := row[i].(string)
-			if strings.HasPrefix(strings.ToLower(r.results.Columns[i]), "time_") {
+			// Check if this is a time field (either time_ prefix or standard GORM time fields)
+			columnName := strings.ToLower(r.results.Columns[i])
+			isTimeField := strings.HasPrefix(columnName, "time_")
+			if !isTimeField {
+				for _, timeField := range defaultTimeFields {
+					if columnName == timeField {
+						isTimeField = true
+						break
+					}
+				}
+			}
+
+			if isTimeField {
 				dest[i], err = time.Parse(time.RFC3339Nano, sv)
 				if err != nil {
 					d1.Trace("Rows.Next parse time string failed: %s", err)
