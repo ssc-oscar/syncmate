@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -90,8 +91,21 @@ func generateTasks(
 			logger.WithField("file", task.VirtualPath).Debug("Skipping already finished task")
 			delete(tasksMap, task.VirtualPath)
 		}
+
+		// quirk on da* servers: resolve /da?_data to /data on da?.eecs.utk.edu
+		// the NFS trick does not work anymore because /da?_data are mounted as NFS
+		hostName, err := os.Hostname()
+		if err != nil {
+			return nil, err
+		}
+		shortHostName := strings.Split(hostName, ".")[0]
+		if strings.HasPrefix(task.SourcePath, "/"+shortHostName) {
+			task.SourcePath = "/" + strings.TrimPrefix(task.SourcePath, "/"+shortHostName+"_")
+			logger.WithField("file", task.VirtualPath).Debugf("Resolved source path to %s", task.SourcePath)
+		}
+
 		if isOnNFS, err := isFileOnNFS(task.SourcePath); err != nil {
-			return nil, fmt.Errorf("failed to check if file %s is on NFS: %w", task.SourcePath, err)
+			return nil, err
 		} else if isOnNFS {
 			// Skip tasks for files on NFS
 			logger.WithField("file", task.SourcePath).Debug("Skipping task for file on NFS")
@@ -110,11 +124,19 @@ func runSend(
 		return fmt.Errorf("Database connection not initialized")
 	}
 	for _, task := range tasksMap {
+		// convert *string to string, empty string if nil
+		var srcDigest, dstDigest string
+		if task.SourceDigest != nil {
+			srcDigest = *task.SourceDigest
+		}
+		if task.TargetDigest != nil {
+			dstDigest = *task.TargetDigest
+		}
 		if err := dbHandle.UpdateTask(&db.Task{
 			VirtualPath: task.VirtualPath,
 			Status:      db.Uploading,
-			SrcDigest:   *task.SourceDigest,
-			DstDigest:   *task.TargetDigest,
+			SrcDigest:   srcDigest,
+			DstDigest:   dstDigest,
 		}); err != nil {
 			return fmt.Errorf("failed to upsert task %s: %w", task.VirtualPath, err)
 		}
@@ -358,7 +380,7 @@ var sendCmd = &cobra.Command{
 			return
 		}
 
-		logger.Info("Sync tasks generated", "count", len(tasksMap))
+		logger.WithField("taskCount", len(tasksMap)).Info("Generated tasks for file transfer")
 
 		if len(tasksMap) > 0 {
 			if err := runSend(tasksMap); err != nil {

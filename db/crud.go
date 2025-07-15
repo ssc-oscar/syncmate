@@ -2,6 +2,7 @@ package db
 
 import (
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // DBOperation defines the interface for database operations
@@ -46,7 +47,10 @@ func (db *DB) GetTask(virtualPath string) (*Task, error) {
 }
 
 func (db *DB) UpdateTask(task *Task) error {
-	if err := db.getConnection().Save(task).Error; err != nil {
+	if err := db.getConnection().Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "virtual_path"}},
+		UpdateAll: true,
+	}).Create(task).Error; err != nil {
 		return err
 	}
 	return nil

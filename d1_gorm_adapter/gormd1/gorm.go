@@ -84,12 +84,12 @@ func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression
 }
 
 func (dialector Dialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
-	dialector.log.Info(dialector.ctx, "call BindVarTo, v=%+v", v)
+	// dialector.log.Info(dialector.ctx, "call BindVarTo, v=%+v", v)
 	writer.WriteByte('?')
 }
 
 func (dialector Dialector) QuoteTo(writer clause.Writer, str string) {
-	dialector.log.Info(dialector.ctx, "call QuoteTo, str=`%s`", str)
+	// dialector.log.Info(dialector.ctx, "call QuoteTo, str=`%s`", str)
 	writer.WriteByte('`')
 	if strings.Contains(str, ".") {
 		for idx, str := range strings.Split(str, ".") {
@@ -107,9 +107,9 @@ func (dialector Dialector) QuoteTo(writer clause.Writer, str string) {
 
 func (dialector Dialector) Explain(sql string, vars ...interface{}) string {
 	var explainSql = logger.ExplainSQL(sql, nil, `"`, vars...)
-	dialector.log.Info(dialector.ctx,
-		"call Explain, sql=`%s`,vars=%+v,explainSql=`%s`",
-		sql, vars, explainSql,
-	)
+	// dialector.log.Info(dialector.ctx,
+	// 	"call Explain, sql=`%s`,vars=%+v,explainSql=`%s`",
+	// 	sql, vars, explainSql,
+	// )
 	return "EXPLAIN " + explainSql
 }
