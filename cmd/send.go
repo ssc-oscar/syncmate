@@ -20,6 +20,26 @@ import (
 	"github.com/winfsp/cgofuse/fuse"
 )
 
+const NFS_SUPER_MAGIC = 0x6969
+
+func isFileOnNFS(filePath string) (bool, error) {
+	var statfs syscall.Statfs_t
+
+	err := syscall.Statfs(filePath, &statfs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, fmt.Errorf("file does not exist: %s", filePath)
+		}
+		return false, fmt.Errorf("failed to get file system info for %s: %w", filePath, err)
+	}
+
+	if statfs.Type == NFS_SUPER_MAGIC {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 type CloudflareCredentials struct {
 	// Explicitly define the fields to avoid duplicate json tags
 	AccountID   string `json:"account_id"`
@@ -67,7 +87,16 @@ func generateTasks(
 	}
 	for _, task := range tasksMap {
 		if task.VirtualPath != "" && finishedFilesMap[task.VirtualPath] {
+			logger.WithField("file", task.VirtualPath).Debug("Skipping already finished task")
 			delete(tasksMap, task.VirtualPath)
+		}
+		if isOnNFS, err := isFileOnNFS(task.SourcePath); err != nil {
+			return nil, fmt.Errorf("failed to check if file %s is on NFS: %w", task.SourcePath, err)
+		} else if isOnNFS {
+			// Skip tasks for files on NFS
+			logger.WithField("file", task.SourcePath).Debug("Skipping task for file on NFS")
+			delete(tasksMap, task.VirtualPath)
+			continue
 		}
 	}
 	return tasksMap, nil
