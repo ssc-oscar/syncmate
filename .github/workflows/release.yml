@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04  # This is intentionally set to an older version for compatibility with the build process
     strategy:
       matrix:
         include:

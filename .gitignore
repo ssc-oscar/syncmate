@@ -10,5 +10,5 @@ pkg/
 # Ignore Go cache files
 *.cache
 
-syncmate
-config.json
+/syncmate*
+/*.json
