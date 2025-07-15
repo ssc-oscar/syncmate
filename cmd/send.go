@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hrz6976/syncmate/db"
+	"github.com/hrz6976/syncmate/logger"
 	of "github.com/hrz6976/syncmate/offsetfs"
 	"github.com/hrz6976/syncmate/rclone"
 	"github.com/hrz6976/syncmate/woc"
@@ -26,6 +27,7 @@ type CloudflareCredentials struct {
 	AccessKeyID string `json:"access_key_id,omitempty"`
 	SecretKey   string `json:"secret_key,omitempty"`
 	Bucket      string `json:"bucket,omitempty"`
+	DatabaseID  string `json:"database_id,omitempty"`
 }
 
 var dbHandle *db.DB
@@ -37,7 +39,7 @@ func connectDB() (*db.DB, error) {
 	}
 	cloudflareD1Creds := db.CloudflareD1Credentials{
 		APIToken:   config.ApiToken,
-		DatabaseID: config.AccountID,
+		DatabaseID: config.DatabaseID,
 		AccountID:  config.AccountID,
 	}
 	gormDB, err := db.ConnectDB(cloudflareD1Creds)
@@ -123,22 +125,21 @@ func runSend(
 	go func() {
 		defer mountWg.Done()
 
-		fmt.Printf("Mounting OffsetFS at %s...\n", mountpoint)
+		logger.Info("Mounting OffsetFS at %s...", mountpoint)
 
 		if !host.Mount(mountpoint, options) {
-			fmt.Printf("Failed to mount OffsetFS at %s\n", mountpoint)
+			logger.Error("Failed to mount OffsetFS", "mountpoint", mountpoint)
 			mountSuccess <- false
 			return
 		}
 
-		fmt.Printf("OffsetFS mounted successfully at %s\n", mountpoint)
-		fmt.Printf("Available files: %d\n", len(offsetConfigs))
+		logger.Info("OffsetFS mounted successfully", "mountpoint", mountpoint, "files", len(offsetConfigs))
 		mountSuccess <- true
 
 		<-ctx.Done()
-		fmt.Println("Unmounting OffsetFS...")
+		logger.Info("Unmounting OffsetFS...")
 		host.Unmount()
-		fmt.Println("OffsetFS unmounted successfully")
+		logger.Info("OffsetFS unmounted successfully")
 	}()
 
 	select {
@@ -160,10 +161,10 @@ func runSend(
 	go func() {
 		select {
 		case <-sigChan:
-			fmt.Println("\nReceived interrupt signal, cleaning up...")
+			logger.Info("Received interrupt signal, cleaning up...")
 			cancel()
 		case <-taskDone:
-			fmt.Println("Tasks completed, cleaning up...")
+			logger.Info("Tasks completed, cleaning up...")
 			cancel()
 		}
 	}()
@@ -173,7 +174,7 @@ func runSend(
 			taskDone <- true
 		}()
 
-		fmt.Println("Starting sync tasks...")
+		logger.Info("Starting sync tasks...")
 
 		// 创建R2后端
 		r2Creds := &rclone.CloudflareR2Credentials{
@@ -186,21 +187,21 @@ func runSend(
 		syncCtx := rclone.InjectGlobalConfig(ctx)
 		fdst, err := rclone.NewR2Backend(syncCtx, r2Creds)
 		if err != nil {
-			fmt.Printf("Failed to create R2 backend: %v\n", err)
+			logger.Error("Failed to create R2 backend", "error", err)
 			return
 		}
 
 		// 检查是否被中断
 		select {
 		case <-ctx.Done():
-			fmt.Println("Upload cancelled before creating local filesystem")
+			logger.Info("Upload cancelled before creating local filesystem")
 			return
 		default:
 		}
 
 		fsrc, err := fs.NewFs(syncCtx, mountpoint)
 		if err != nil {
-			fmt.Printf("Failed to create local filesystem: %v\n", err)
+			logger.Error("Failed to create local filesystem", "error", err)
 			return
 		}
 
@@ -211,16 +212,16 @@ func runSend(
 		}
 
 		if len(fileList) == 0 {
-			fmt.Println("No files to upload")
+			logger.Info("No files to upload")
 			return
 		}
 
-		fmt.Printf("Uploading %d files to R2...\n", len(fileList))
+		logger.Info("Uploading files to R2...", "count", len(fileList))
 
 		// 再次检查是否被中断
 		select {
 		case <-ctx.Done():
-			fmt.Println("Upload cancelled before starting file transfer")
+			logger.Info("Upload cancelled before starting file transfer")
 			return
 		default:
 		}
@@ -240,24 +241,24 @@ func runSend(
 		select {
 		case err := <-uploadDone:
 			if err != nil {
-				fmt.Printf("Failed to upload files to R2: %v\n", err)
+				logger.Error("File upload failed", "error", err)
 				return
 			}
-			fmt.Println("File upload completed successfully")
+			logger.Info("File upload completed successfully")
 		case <-ctx.Done():
-			fmt.Println("Upload cancelled by user interrupt")
+			logger.Info("Upload cancelled by user interrupt")
 			// 这里可以添加清理逻辑，比如取消正在进行的上传
 			return
 		}
 
 		// 更新数据库状态为完成
 		if dbHandle != nil {
-			fmt.Println("Updating task status in database...")
+			logger.Info("Updating task status in database...")
 			for _, task := range tasksMap {
 				// 再次检查是否被中断
 				select {
 				case <-ctx.Done():
-					fmt.Println("Database update cancelled by user interrupt")
+					logger.Info("Database update cancelled by user interrupt")
 					return
 				default:
 				}
@@ -268,12 +269,12 @@ func runSend(
 					SrcDigest:   *task.SourceDigest,
 					DstDigest:   *task.TargetDigest,
 				}); err != nil {
-					fmt.Printf("Failed to update task status %s: %v\n", task.VirtualPath, err)
+					logger.Error("Failed to update task status in database", "virtualPath", task.VirtualPath, "error", err)
 				}
 			}
 		}
 
-		fmt.Println("Sync tasks completed successfully")
+		logger.Info("Sync tasks completed successfully")
 	}()
 
 	mountWg.Wait()
@@ -328,7 +329,7 @@ var sendCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("Generated %d sync tasks\n", len(tasksMap))
+		logger.Info("Sync tasks generated", "count", len(tasksMap))
 
 		if len(tasksMap) > 0 {
 			if err := runSend(tasksMap); err != nil {
@@ -336,7 +337,7 @@ var sendCmd = &cobra.Command{
 				return
 			}
 		} else {
-			fmt.Println("No tasks to execute")
+			logger.Info("No tasks to execute")
 		}
 	},
 }
