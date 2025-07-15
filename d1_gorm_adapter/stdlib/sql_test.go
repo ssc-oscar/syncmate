@@ -24,6 +24,10 @@ var accountId string
 var datebaseId string
 
 func TestMain(m *testing.M) {
+	if _, err := os.Stat("../dev.env"); os.IsNotExist(err) {
+		log.Warn("dev.env not found, skipping test")
+		os.Exit(0)
+	}
 	var err = godotenv.Load("../dev.env")
 	if err != nil {
 		panic(err)

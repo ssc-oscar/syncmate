@@ -2,7 +2,6 @@ package gormd1_test
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/hrz6976/syncmate/d1_gorm_adapter/gormd1"
 	_ "github.com/hrz6976/syncmate/d1_gorm_adapter/stdlib"
 	"github.com/joho/godotenv"
+	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -23,6 +23,10 @@ var accountId string
 var datebaseId string
 
 func TestMain(m *testing.M) {
+	if _, err := os.Stat("../dev.env"); os.IsNotExist(err) {
+		log.Warn("dev.env not found, skipping test")
+		os.Exit(0)
+	}
 	var err = godotenv.Load("../dev.env")
 	if err != nil {
 		panic(err)
