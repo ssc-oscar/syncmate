@@ -36,7 +36,7 @@ func TestCopyFiles_WithR2Backend(t *testing.T) {
 	err = os.WriteFile(testFile, []byte(testContent), 0644)
 	require.NoError(t, err)
 
-	ctx := InjectGlobalConfig(context.Background())
+	ctx := InjectConfig(context.Background(), []string{testFile})
 	fsrc, err := fs.NewFs(ctx, srcDir)
 	require.NoError(t, err)
 

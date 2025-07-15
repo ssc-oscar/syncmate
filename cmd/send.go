@@ -286,7 +286,7 @@ func runSend(
 
 		// 在单独的goroutine中执行上传
 		go func() {
-			uploadDone <- rclone.Run(ctx, func() error {
+			uploadDone <- rclone.Run(syncCtx, func() error {
 				return rclone.CopyFiles(syncCtx, fsrc, fdst, fileList)
 			})
 		}()
