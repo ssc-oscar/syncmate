@@ -41,7 +41,7 @@ func TestMain(m *testing.M) {
 	d1.TraceOn(os.Stdout)
 
 	newLogger := logger.New(
-		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+		log.StandardLogger(), // io writer
 		logger.Config{
 			SlowThreshold: time.Second, // Slow SQL threshold
 			LogLevel:      logger.Info, // Log level

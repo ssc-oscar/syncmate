@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/hrz6976/syncmate/db"
-	"github.com/hrz6976/syncmate/logger"
 	of "github.com/hrz6976/syncmate/offsetfs"
 	"github.com/hrz6976/syncmate/rclone"
 	"github.com/hrz6976/syncmate/woc"
 	"github.com/rclone/rclone/fs"
+	logger "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/winfsp/cgofuse/fuse"
 )
@@ -125,15 +125,15 @@ func runSend(
 	go func() {
 		defer mountWg.Done()
 
-		logger.Info("Mounting OffsetFS at %s...", mountpoint)
+		logger.WithField("mountpoint", mountpoint).Info("Mounting OffsetFS...")
 
 		if !host.Mount(mountpoint, options) {
-			logger.Error("Failed to mount OffsetFS", "mountpoint", mountpoint)
+			logger.WithField("mountpoint", mountpoint).Error("Failed to mount OffsetFS")
 			mountSuccess <- false
 			return
 		}
 
-		logger.Info("OffsetFS mounted successfully", "mountpoint", mountpoint, "files", len(offsetConfigs))
+		logger.WithField("mountpoint", mountpoint).WithField("files", len(offsetConfigs)).Info("OffsetFS mounted successfully")
 		mountSuccess <- true
 
 		<-ctx.Done()
@@ -201,7 +201,7 @@ func runSend(
 
 		fsrc, err := fs.NewFs(syncCtx, mountpoint)
 		if err != nil {
-			logger.Error("Failed to create local filesystem", "error", err)
+			logger.WithError(err).Error("Failed to create local filesystem")
 			return
 		}
 
@@ -216,7 +216,7 @@ func runSend(
 			return
 		}
 
-		logger.Info("Uploading files to R2...", "count", len(fileList))
+		logger.WithField("count", len(fileList)).Info("Uploading files to R2...")
 
 		// 再次检查是否被中断
 		select {
@@ -241,7 +241,7 @@ func runSend(
 		select {
 		case err := <-uploadDone:
 			if err != nil {
-				logger.Error("File upload failed", "error", err)
+				logger.WithError(err).Error("File upload failed")
 				return
 			}
 			logger.Info("File upload completed successfully")
@@ -269,7 +269,7 @@ func runSend(
 					SrcDigest:   *task.SourceDigest,
 					DstDigest:   *task.TargetDigest,
 				}); err != nil {
-					logger.Error("Failed to update task status in database", "virtualPath", task.VirtualPath, "error", err)
+					logger.WithError(err).WithField("virtualPath", task.VirtualPath).Error("Failed to update task status in database")
 				}
 			}
 		}

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hrz6976/syncmate/logger"
 	of "github.com/hrz6976/syncmate/offsetfs" // Assuming offsetfs is the package where WocFile, WocObject, WocMap, and WocProfile are defined
+	logger "github.com/sirupsen/logrus"
 )
 
 // WocFile represents a file in the WoC database.
@@ -117,13 +117,15 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			panic(fmt.Errorf("shard size is nil for file %s", file.Path))
 		}
 		if file.Digest == nil {
-			logger.Debug("calculating file sample md5", "path", file.Path, "skip", 0, "size", int64(*file.Size))
+			logger.WithFields(logger.Fields{
+				"path": file.Path,
+				"size": *file.Size,
+			}).Debug("Calculating sample MD5 for file")
 			res, err := SampleMD5(file.Path, 0, 0)
 			if err == nil {
 				file.Digest = &res.Digest
 			} else {
-				logger.Error("failed to calculate sample md5, were the profiles generated with --with-digest?",
-					"path", file.Path, "error", err)
+				logger.WithField("path", file.Path).WithError(err).Error("failed to calculate sample md5, were the profiles generated with --with-digest?")
 				panic(err)
 			}
 		}
@@ -157,6 +159,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 		if *srcFile.Size < *dstFile.Size {
 			logger.Warn(fmt.Sprintf("source file %s size %d is smaller than destination file %s size %d",
 				srcFile.Path, *srcFile.Size, dstFile.Path, *dstFile.Size))
+			addFullCopyTask(srcFile)
 			return
 		}
 		if srcFile.Digest == nil {
@@ -218,10 +221,14 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			} else {
 				partialMd5, err := SampleMD5(shard.Path, 0, 0)
 				if err != nil {
-					logger.Error("failed to calculate part md5", "path", shard.Path, "error", err)
+					logger.WithError(err).WithField("path", shard.Path).Error("Failed to calculate sample MD5")
 					panic(err)
 				}
-				logger.Debug("Calculated partial MD5", "path", shard.Path, "digest", partialMd5.Digest)
+				logger.WithFields(logger.Fields{
+					"path":   shard.Path,
+					"size":   *shard.Size,
+					"digest": partialMd5.Digest,
+				}).Debug("Calculated partial MD5 for shard")
 				if partialMd5.Digest != *oldShard.Digest {
 					logger.Warn(fmt.Sprintf("partial MD5 mismatch for shard %s: %s != %s",
 						shard.Path, partialMd5.Digest, *oldShard.Digest))
