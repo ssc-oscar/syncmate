@@ -219,7 +219,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			if testing.Testing() {
 				logger.Debug("Skipping digest check in test mode", "path", shard.Path)
 			} else {
-				partialMd5, err := SampleMD5(shard.Path, 0, 0)
+				partialMd5, err := SampleMD5(shard.Path, int64(*oldShard.Size), 0)
 				if err != nil {
 					logger.WithError(err).WithField("path", shard.Path).Error("Failed to calculate sample MD5")
 					panic(err)
