@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hrz6976/syncmate/test"
 	"github.com/winfsp/cgofuse/fuse"
 )
 
@@ -13,6 +14,10 @@ import (
 func TestIntegration_MountUnmount(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
+	}
+
+	if test.IsRaceEnabled() {
+		t.Skip("Skipping cgofuse integration test with race detector due to known issues. Check https://github.com/winfsp/cgofuse/pull/53")
 	}
 
 	tmpDir := setupTestDir(t)
@@ -189,6 +194,7 @@ func TestIntegration_MultipleFiles(t *testing.T) {
 
 // TestIntegration_OffsetAndSize 测试偏移和大小限制
 func TestIntegration_OffsetAndSize(t *testing.T) {
+
 	tmpDir := setupTestDir(t)
 
 	// 创建一个较大的源文件
