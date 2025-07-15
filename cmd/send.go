@@ -375,8 +375,5 @@ func init() {
 	sendCmd.Flags().StringP("src", "s", "woc.src.json", "WoC profile of the transfer source")
 	sendCmd.Flags().StringP("dst", "d", "woc.dst.json", "Woc profile of the transfer destination")
 	sendCmd.Flags().StringP("config", "c", "config.json", "Path to the configuration file")
-	sendCmd.MarkFlagRequired("src")
-	sendCmd.MarkFlagRequired("dst")
-	sendCmd.MarkFlagRequired("config")
 	RootCmd.AddCommand(sendCmd)
 }
