@@ -7,20 +7,11 @@ import (
 	_ "github.com/rclone/rclone/backend/local"
 	"github.com/rclone/rclone/backend/s3"
 	"github.com/rclone/rclone/fs"
+	"github.com/rclone/rclone/fs/accounting"
 	"github.com/rclone/rclone/fs/config/configmap"
 	"github.com/rclone/rclone/fs/filter"
+	"github.com/rclone/rclone/fs/log"
 )
-
-// InjectGlobalConfig injects global configuration into the context.
-func InjectGlobalConfig(ctx context.Context) context.Context {
-	ctx, ci := fs.AddConfig(ctx)
-	ci.Progress = true
-	ci.LogLevel = fs.LogLevelDebug
-	ci.Retries = 10
-	ci.LowLevelRetries = 100
-	ci.NoTraverse = true
-	return ctx
-}
 
 // InjectFileList injects a list of files into the context for filtering.
 func InjectFileList(ctx context.Context, files []string) context.Context {
@@ -34,6 +25,26 @@ func InjectFileList(ctx context.Context, files []string) context.Context {
 		}
 	}
 	return filter.ReplaceConfig(ctx, f)
+}
+
+func InjectConfig(
+	ctx context.Context,
+	files []string,
+) context.Context {
+	ctx, ci := fs.AddConfig(ctx)
+	ci.Progress = true
+	ci.AskPassword = false
+	ci.LogLevel = fs.LogLevelDebug
+	ci.StatsLogLevel = fs.LogLevelDebug
+	ci.Retries = 10
+	ci.LowLevelRetries = 100
+	ci.NoTraverse = true
+	ci.StatsOneLine = true
+	ctx = InjectFileList(ctx, files)
+	accounting.Start(ctx)
+	log.InitLogging()
+	ci.Reload(ctx)
+	return ctx
 }
 
 type CloudflareR2Credentials struct {

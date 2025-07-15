@@ -2,6 +2,7 @@ package offsetfs
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -102,6 +103,8 @@ func TestIntegration_MountUnmount(t *testing.T) {
 	// 卸载
 	if !host.Unmount() {
 		t.Errorf("Unmount failed")
+		// 强制清理，防止留下僵尸挂载点
+		_ = exec.Command("fusermount", "-u", mountpoint).Run()
 	}
 
 	// 等待卸载完成
@@ -110,6 +113,8 @@ func TestIntegration_MountUnmount(t *testing.T) {
 		// 正常卸载
 	case <-time.After(5 * time.Second):
 		t.Errorf("Mount goroutine did not complete within timeout")
+		// 强制清理，防止留下僵尸挂载点
+		_ = exec.Command("fusermount", "-u", mountpoint).Run()
 	}
 
 	t.Log("Integration test completed successfully")

@@ -11,7 +11,6 @@ func CopyFiles(
 	ctx context.Context,
 	fsrc fs.Fs, fdst fs.Fs, files []string,
 ) error {
-	ctx = InjectGlobalConfig(ctx)
-	ctx = InjectFileList(ctx, files)
+	ctx = InjectConfig(ctx, files)
 	return sync.CopyDir(ctx, fdst, fsrc, false)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -43,12 +44,12 @@ func isFileOnNFS(filePath string) (bool, error) {
 
 type CloudflareCredentials struct {
 	// Explicitly define the fields to avoid duplicate json tags
-	AccountID   string `json:"account_id"`
-	ApiToken    string `json:"api_token,omitempty"`
-	AccessKeyID string `json:"access_key_id,omitempty"`
-	SecretKey   string `json:"secret_key,omitempty"`
-	Bucket      string `json:"bucket,omitempty"`
-	DatabaseID  string `json:"database_id,omitempty"`
+	AccountID  string `json:"account_id"`
+	ApiToken   string `json:"api_token,omitempty"`
+	AccessKey  string `json:"access_key,omitempty"`
+	SecretKey  string `json:"secret_key,omitempty"`
+	Bucket     string `json:"bucket,omitempty"`
+	DatabaseID string `json:"database_id,omitempty"`
 }
 
 var dbHandle *db.DB
@@ -75,12 +76,13 @@ func generateTasks(
 	srcProfile,
 	dstProfile *woc.ParsedWocProfile) (map[string]*woc.WocSyncTask, error) {
 	tasksMap := woc.GenerateFileLists(dstProfile, srcProfile)
-	if dbHandle == nil {
-		return nil, fmt.Errorf("Database connection not initialized")
-	}
-	finishedFiles, err := dbHandle.ListFinishedVirtualPaths()
-	if err != nil {
-		return nil, err
+	var finishedFiles []string
+	var err error
+	if dbHandle != nil {
+		finishedFiles, err = dbHandle.ListFinishedVirtualPaths()
+		if err != nil {
+			return nil, err
+		}
 	}
 	finishedFilesMap := make(map[string]bool)
 	for _, file := range finishedFiles {
@@ -120,25 +122,26 @@ func runSend(
 	tasksMap map[string]*woc.WocSyncTask,
 ) error {
 	// 1. Populate the remote database
-	if dbHandle == nil {
-		return fmt.Errorf("Database connection not initialized")
-	}
-	for _, task := range tasksMap {
-		// convert *string to string, empty string if nil
-		var srcDigest, dstDigest string
-		if task.SourceDigest != nil {
-			srcDigest = *task.SourceDigest
-		}
-		if task.TargetDigest != nil {
-			dstDigest = *task.TargetDigest
-		}
-		if err := dbHandle.UpdateTask(&db.Task{
-			VirtualPath: task.VirtualPath,
-			Status:      db.Uploading,
-			SrcDigest:   srcDigest,
-			DstDigest:   dstDigest,
-		}); err != nil {
-			return fmt.Errorf("failed to upsert task %s: %w", task.VirtualPath, err)
+	if dbHandle != nil {
+		for _, task := range tasksMap {
+			var srcDigest, dstDigest string
+			if task.SourceDigest != nil {
+				srcDigest = *task.SourceDigest
+			}
+			if task.TargetDigest != nil {
+				dstDigest = *task.TargetDigest
+			}
+			if err := dbHandle.UpdateTask(&db.Task{
+				VirtualPath: task.VirtualPath,
+				Status:      db.Uploading,
+				SrcDigest:   srcDigest,
+				DstDigest:   dstDigest,
+				SrcPath:     task.SourcePath,
+				SrcSize:     task.Size,
+				DstSize:     task.Offset,
+			}); err != nil {
+				return fmt.Errorf("failed to upsert task %s: %w", task.VirtualPath, err)
+			}
 		}
 	}
 
@@ -154,24 +157,35 @@ func runSend(
 	}
 
 	mountpoint := "/tmp/syncmate_offsetfs"
-	if err := os.MkdirAll(mountpoint, 0755); err != nil {
-		return fmt.Errorf("failed to create mountpoint: %w", err)
+	// does the dir exist?
+	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
+		// Create the mountpoint directory if it doesn't exist
+		if err := os.MkdirAll(mountpoint, 0755); err != nil {
+			return fmt.Errorf("failed to create mountpoint: %w", err)
+		}
+	} else {
+		// If Mountpoint exists, clean it up
+		if err := exec.Command("fusermount3", "-u", mountpoint).Run(); err != nil {
+			logger.WithError(err).Error("Failed to unmount existing mountpoint")
+		}
 	}
+
+	// Clean up any existing mount at this location
+	_ = exec.Command("fusermount", "-u", mountpoint).Run()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	filesystem := of.NewOffsetFS(offsetConfigs, true) // 只读模式
+	filesystem := of.NewOffsetFS(offsetConfigs, true)
 	host := fuse.NewFileSystemHost(filesystem)
 
 	options := []string{
 		"-o", "fsname=syncmate_offsetfs",
-		"-o", "volname=SyncMate OffsetFS",
+		"-o", "default_permissions",
 	}
 
 	var mountWg sync.WaitGroup
 	mountWg.Add(1)
-	mountSuccess := make(chan bool, 1)
 
 	go func() {
 		defer mountWg.Done()
@@ -180,12 +194,8 @@ func runSend(
 
 		if !host.Mount(mountpoint, options) {
 			logger.WithField("mountpoint", mountpoint).Error("Failed to mount OffsetFS")
-			mountSuccess <- false
 			return
 		}
-
-		logger.WithField("mountpoint", mountpoint).WithField("files", len(offsetConfigs)).Info("OffsetFS mounted successfully")
-		mountSuccess <- true
 
 		<-ctx.Done()
 		logger.Info("Unmounting OffsetFS...")
@@ -193,16 +203,7 @@ func runSend(
 		logger.Info("OffsetFS unmounted successfully")
 	}()
 
-	select {
-	case success := <-mountSuccess:
-		if !success {
-			cancel()
-			return fmt.Errorf("failed to mount OffsetFS")
-		}
-	case <-time.After(10 * time.Second):
-		cancel()
-		return fmt.Errorf("timeout waiting for OffsetFS mount")
-	}
+	time.Sleep(1 * time.Second) // Give some time for the mount to complete
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -214,9 +215,17 @@ func runSend(
 		case <-sigChan:
 			logger.Info("Received interrupt signal, cleaning up...")
 			cancel()
+			_, err := exec.Command("fusermount3", "-u", mountpoint).CombinedOutput()
+			if err != nil {
+				logger.WithError(err).Error("Failed to unmount OffsetFS on interrupt")
+			}
 		case <-taskDone:
 			logger.Info("Tasks completed, cleaning up...")
 			cancel()
+			_, err := exec.Command("fusermount3", "-u", mountpoint).CombinedOutput()
+			if err != nil {
+				logger.WithError(err).Error("Failed to unmount OffsetFS after tasks completed")
+			}
 		}
 	}()
 
@@ -226,35 +235,6 @@ func runSend(
 		}()
 
 		logger.Info("Starting sync tasks...")
-
-		// 创建R2后端
-		r2Creds := &rclone.CloudflareR2Credentials{
-			AccessKey: config.AccessKeyID,
-			SecretKey: config.SecretKey,
-			AccountID: config.AccountID,
-			Bucket:    config.Bucket,
-		}
-
-		syncCtx := rclone.InjectGlobalConfig(ctx)
-		fdst, err := rclone.NewR2Backend(syncCtx, r2Creds)
-		if err != nil {
-			logger.Error("Failed to create R2 backend", "error", err)
-			return
-		}
-
-		// 检查是否被中断
-		select {
-		case <-ctx.Done():
-			logger.Info("Upload cancelled before creating local filesystem")
-			return
-		default:
-		}
-
-		fsrc, err := fs.NewFs(syncCtx, mountpoint)
-		if err != nil {
-			logger.WithError(err).Error("Failed to create local filesystem")
-			return
-		}
 
 		// 准备要上传的文件列表
 		var fileList []string
@@ -269,7 +249,32 @@ func runSend(
 
 		logger.WithField("count", len(fileList)).Info("Uploading files to R2...")
 
-		// 再次检查是否被中断
+		syncCtx := rclone.InjectConfig(ctx, fileList)
+		r2Creds := &rclone.CloudflareR2Credentials{
+			AccessKey: config.AccessKey,
+			SecretKey: config.SecretKey,
+			AccountID: config.AccountID,
+			Bucket:    config.Bucket,
+		}
+		fdst, err := rclone.NewR2Backend(syncCtx, r2Creds)
+		if err != nil {
+			logger.WithError(err).Error("Failed to create R2 backend")
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			logger.Info("Upload cancelled before creating local filesystem")
+			return
+		default:
+		}
+
+		fsrc, err := fs.NewFs(syncCtx, mountpoint)
+		if err != nil {
+			logger.WithError(err).Error("Failed to create local filesystem")
+			return
+		}
+
 		select {
 		case <-ctx.Done():
 			logger.Info("Upload cancelled before starting file transfer")
@@ -277,15 +282,13 @@ func runSend(
 		default:
 		}
 
-		// 执行文件上传，传递可取消的context
-		uploadCtx := rclone.InjectFileList(syncCtx, fileList)
-
-		// 创建一个用于监控上传进度的channel
 		uploadDone := make(chan error, 1)
 
 		// 在单独的goroutine中执行上传
 		go func() {
-			uploadDone <- rclone.CopyFiles(uploadCtx, fsrc, fdst, fileList)
+			uploadDone <- rclone.Run(ctx, func() error {
+				return rclone.CopyFiles(syncCtx, fsrc, fdst, fileList)
+			})
 		}()
 
 		// 等待上传完成或被中断
@@ -317,6 +320,9 @@ func runSend(
 				if err := dbHandle.UpdateTask(&db.Task{
 					VirtualPath: task.VirtualPath,
 					Status:      db.Uploaded,
+					SrcPath:     task.SourcePath,
+					SrcSize:     task.Size,
+					DstSize:     task.Offset,
 					SrcDigest:   *task.SourceDigest,
 					DstDigest:   *task.TargetDigest,
 				}); err != nil {
@@ -341,6 +347,7 @@ var sendCmd = &cobra.Command{
 		srcPath, _ := cmd.Flags().GetString("src")
 		dstPath, _ := cmd.Flags().GetString("dst")
 		configPath, _ := cmd.Flags().GetString("config")
+		skipDB, _ := cmd.Flags().GetBool("skip-db")
 
 		if srcPath == "" || dstPath == "" || configPath == "" {
 			cmd.Help()
@@ -357,12 +364,6 @@ var sendCmd = &cobra.Command{
 			}
 		}
 
-		_, err := connectDB() // 连接数据库
-		if err != nil {
-			cmd.PrintErrf("Failed to connect to database: %v\n", err)
-			return
-		}
-
 		srcProfile, err := woc.ParseWocProfile(&srcPath)
 		if err != nil {
 			cmd.PrintErrf("Failed to parse source profile: %v\n", err)
@@ -372,6 +373,14 @@ var sendCmd = &cobra.Command{
 		if err != nil {
 			cmd.PrintErrf("Failed to parse destination profile: %v\n", err)
 			return
+		}
+
+		if !skipDB {
+			_, err = connectDB()
+			if err != nil {
+				cmd.PrintErrf("Failed to connect to database: %v\n", err)
+				return
+			}
 		}
 
 		tasksMap, err := generateTasks(srcProfile, dstProfile)
@@ -397,5 +406,6 @@ func init() {
 	sendCmd.Flags().StringP("src", "s", "woc.src.json", "WoC profile of the transfer source")
 	sendCmd.Flags().StringP("dst", "d", "woc.dst.json", "Woc profile of the transfer destination")
 	sendCmd.Flags().StringP("config", "c", "config.json", "Path to the configuration file")
+	sendCmd.Flags().Bool("skip-db", false, "Skip database operations")
 	RootCmd.AddCommand(sendCmd)
 }

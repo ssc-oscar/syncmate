@@ -230,7 +230,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 					"digest": partialMd5.Digest,
 				}).Debug("Calculated partial MD5 for shard")
 				if partialMd5.Digest != *oldShard.Digest {
-					logger.Warn(fmt.Sprintf("partial MD5 mismatch for shard %s: %s != %s",
+					logger.Debug(fmt.Sprintf("partial MD5 mismatch for shard %s: %s != %s",
 						shard.Path, partialMd5.Digest, *oldShard.Digest))
 					addFullCopyTask(shard)
 					continue
