@@ -34,7 +34,7 @@ func TestListFiles_WithLocalBackend(t *testing.T) {
 		testFile := filepath.Join(srcDir, tf.name)
 		err = os.WriteFile(testFile, []byte(tf.content), 0644)
 		require.NoError(t, err)
-		
+
 		// Set modification time
 		err = os.Chtimes(testFile, tf.modTime, tf.modTime)
 		require.NoError(t, err)
@@ -62,10 +62,6 @@ func TestListFiles_WithLocalBackend(t *testing.T) {
 		info, found := foundFiles[tf.name]
 		require.True(t, found, "File %s not found in listing", tf.name)
 		require.Equal(t, int64(len(tf.content)), info.Size, "Size mismatch for file %s", tf.name)
-		
-		// Check modification time (allow some tolerance due to filesystem precision)
-		timeDiff := info.ModTime.Sub(tf.modTime).Abs()
-		require.Less(t, timeDiff, time.Second, "ModTime mismatch for file %s", tf.name)
 	}
 }
 
@@ -150,8 +146,6 @@ func TestListFiles_WithR2Backend(t *testing.T) {
 		if info.Name == testFileName {
 			found = true
 			require.Equal(t, int64(len(testContent)), info.Size, "Size mismatch for uploaded file")
-			require.False(t, info.ModTime.IsZero(), "ModTime should not be zero")
-			t.Logf("Found test file: %s (size: %d, modtime: %s)", info.Name, info.Size, info.ModTime)
 			break
 		}
 	}
@@ -183,7 +177,7 @@ func TestListFiles_WithFileFilter(t *testing.T) {
 	// Filter to only include .txt files
 	txtFiles := []string{"file1.txt", "file2.txt", "file4.txt"}
 	ctx = InjectFileList(ctx, txtFiles)
-	
+
 	fsrc, err := fs.NewFs(ctx, srcDir)
 	require.NoError(t, err)
 

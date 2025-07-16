@@ -291,6 +291,7 @@ func runRecv(
 		return err
 	}
 
+	logger.Info("Getting existing files from R2...")
 	existingFiles, err := rclone.ListFiles(syncCtx, fsrc)
 	if err != nil {
 		logger.WithError(err).Error("Failed to list files from R2")
@@ -310,8 +311,6 @@ func runRecv(
 	if err := processDoneFiles(ctx, tasksMap, deleteFileFunc); err != nil {
 		return err
 	}
-
-	logger.Info("Getting existing files from R2...")
 
 	// update task list
 	ignoredFilesMap := make(map[string]bool)
@@ -363,7 +362,6 @@ func runRecv(
 		logger.WithFields(logger.Fields{
 			"virtualPath": finfo.Name,
 			"size":        finfo.Size,
-			"modTime":     finfo.ModTime,
 		}).Debug("Found existing file in R2")
 	}
 	// inject file list into context

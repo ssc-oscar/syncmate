@@ -2,31 +2,34 @@ package rclone
 
 import (
 	"context"
-	"time"
 
 	"github.com/rclone/rclone/fs"
-	"github.com/rclone/rclone/fs/accounting"
 	"github.com/rclone/rclone/fs/operations"
 )
 
 type RcloneFileInfo struct {
-	Name    string
-	Size    int64
-	ModTime time.Time
+	Name string
+	Size int64
 }
 
 func ListFiles(ctx context.Context, f fs.Fs) ([]RcloneFileInfo, error) {
 	var fileInfos []RcloneFileInfo
-	err := operations.ListFn(ctx, f, func(o fs.Object) {
-		tr := accounting.Stats(ctx).NewCheckingTransfer(o, "listing")
-		defer func() {
-			tr.Done(ctx, nil)
-		}()
+	var opt = operations.ListJSONOpt{
+		NoModTime:  true,
+		NoMimeType: true,
+		DirsOnly:   false,
+		FilesOnly:  true,
+		Recurse:    false,
+	}
+	err := operations.ListJSON(ctx, f, "", &opt, func(item *operations.ListJSONItem) error {
+		if item.IsDir {
+			return nil // Skip directories
+		}
 		fileInfos = append(fileInfos, RcloneFileInfo{
-			Name:    o.Remote(),
-			Size:    o.Size(),
-			ModTime: o.ModTime(ctx),
+			Name: item.Path,
+			Size: item.Size,
 		})
+		return nil
 	})
 	if err != nil {
 		return nil, err
