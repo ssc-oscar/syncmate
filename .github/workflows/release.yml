@@ -68,8 +68,13 @@ jobs:
         CGO_ENABLED: ${{ matrix.cgo }}
         CC: ${{ matrix.cc }}
       run: |
-        CC="zig cc -target x86_64-linux-gnu.2.31"
-        CXX="zig c++ -target x86_64-linux-gnu.2.31"
+        if [ "${{ matrix.goarch }}" = "amd64" ]; then
+          CC="zig cc -target x86_64-linux-gnu.2.31"
+          CXX="zig c++ -target x86_64-linux-gnu.2.31"
+        elif [ "${{ matrix.goarch }}" = "arm64" ]; then
+          CC="zig cc -target aarch64-linux-gnu.2.31"
+          CXX="zig c++ -target aarch64-linux-gnu.2.31"
+        fi
         VERSION="${{ github.ref_name }}"
         COMMIT_HASH_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
         BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
