@@ -249,7 +249,8 @@ func runSend(
 
 		logger.WithField("count", len(fileList)).Info("Uploading files to R2...")
 
-		syncCtx := rclone.InjectConfig(ctx, fileList)
+		syncCtx := rclone.InjectConfig(ctx)
+		syncCtx = rclone.InjectFileList(syncCtx, fileList)
 		r2Creds := &rclone.CloudflareR2Credentials{
 			AccessKey: config.AccessKey,
 			SecretKey: config.SecretKey,

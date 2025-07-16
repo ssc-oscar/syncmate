@@ -13,7 +13,7 @@ import (
 )
 
 // injectFileList injects a list of files into the context for filtering.
-func injectFileList(ctx context.Context, files []string) context.Context {
+func InjectFileList(ctx context.Context, files []string) context.Context {
 	f, err := filter.NewFilter(nil)
 	if err != nil {
 		panic(err)
@@ -28,7 +28,6 @@ func injectFileList(ctx context.Context, files []string) context.Context {
 
 func InjectConfig(
 	ctx context.Context,
-	files []string,
 ) context.Context {
 	ctx, ci := fs.AddConfig(ctx)
 	ci.Progress = true
@@ -39,7 +38,7 @@ func InjectConfig(
 	ci.LowLevelRetries = 100
 	ci.NoTraverse = true
 	ci.StatsOneLine = true
-	ctx = injectFileList(ctx, files)
+	// ctx = injectFileList(ctx, files)
 	accounting.Start(ctx)
 	// // This is kinda stupid: rclone reads log level from an empty context
 	// log.InitLogging()

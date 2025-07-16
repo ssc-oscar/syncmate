@@ -37,7 +37,7 @@ func TestNewR2Backend_WithRealCredentials(t *testing.T) {
 		t.Fatalf("Failed to load credentials from config: %v", err)
 	}
 
-	ctx := InjectGlobalConfig(context.Background())
+	ctx := InjectConfig(context.Background())
 	backend, err := NewR2Backend(ctx, creds)
 
 	if err != nil {
