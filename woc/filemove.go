@@ -100,7 +100,7 @@ func MoveFile(
 		ctx := context.Background()
 		progressChan := progress.NewTicker(ctx, r, srcStat.Size(), 10*time.Second)
 		for p := range progressChan {
-			logger.Debugf("Moving file %s, %.1f%% copied, remaining %vs", srcPath, p.Percent(), p.Remaining().Round(time.Second))
+			logger.Debugf("Moving file %s->%s, %.1f%% copied, remaining %v", srcPath, dstPath, p.Percent(), p.Remaining().Round(time.Second))
 		}
 		logger.Infof("Moved file %s successfully", srcPath)
 	}()
