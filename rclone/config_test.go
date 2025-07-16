@@ -63,6 +63,6 @@ func TestNewR2Backend_WithRealCredentials(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to list files: %v", err)
 	} else {
-		t.Logf("Files listed successfully: %v", files)
+		t.Logf("Files listed successfully: %d files found", len(files))
 	}
 }
