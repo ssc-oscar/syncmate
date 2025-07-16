@@ -11,7 +11,8 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-20.04  # This is intentionally set to an older version for libc compatibility
+    # Intentionally set to an older version for better compatibility.
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         include:
@@ -22,23 +23,23 @@ jobs:
             tags: ""
             suffix: ""
           - goos: linux
+            goarch: amd64
+            cc: gcc
+            cgo: 1
+            tags: "fuse3"
+            suffix: "-fuse3"
+          - goos: linux
             goarch: arm64
             cc: aarch64-linux-gnu-gcc
             cgo: 1
             tags: ""
             suffix: ""
           - goos: linux
-            goarch: amd64
-            cc: gcc
-            cgo: 1
-            tags: fuse3
-            suffix: -fuse3
-          - goos: linux
             goarch: arm64
             cc: aarch64-linux-gnu-gcc
             cgo: 1
-            tags: fuse3
-            suffix: -fuse3
+            tags: "fuse3"
+            suffix: "-fuse3"
 
     steps:
     - uses: actions/checkout@v4
@@ -69,19 +70,16 @@ jobs:
           BINARY_NAME="${BINARY_NAME}.exe"
         fi
         
-        if [ "${{ matrix.tags }}" != "" ]; then
-          go build -tags=${{ matrix.tags }} -v -ldflags="-s -w \
-            -X 'main.VERSION=${VERSION}' \
-            -X 'main.BUILD_TIME=${BUILD_TIME}' \
-            -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
-            -o "${BINARY_NAME}" .
-        else
-          go build -v -ldflags="-s -w \
-            -X 'main.VERSION=${VERSION}' \
-            -X 'main.BUILD_TIME=${BUILD_TIME}' \
-            -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
-            -o "${BINARY_NAME}" .
+        TAGS_FLAG=""
+        if [ -n "${{ matrix.tags }}" ]; then
+          TAGS_FLAG="-tags=${{ matrix.tags }}"
         fi
+        
+        go build -v ${TAGS_FLAG} -ldflags="-s -w \
+          -X 'main.VERSION=${VERSION}' \
+          -X 'main.BUILD_TIME=${BUILD_TIME}' \
+          -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
+          -o "${BINARY_NAME}" .
 
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v1
