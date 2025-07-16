@@ -23,9 +23,16 @@ using S3 as the transfer medium.`,
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		debug, _ := cmd.Flags().GetBool("debug")
-		if debug {
-			logger.SetLevel(logger.DebugLevel)
+		verbose, _ := cmd.Flags().GetCount("verbose")
+		if verbose > 0 {
+			switch verbose {
+			case 1:
+				logger.SetLevel(logger.InfoLevel)
+			case 2:
+				logger.SetLevel(logger.DebugLevel)
+			default: // 3 or more
+				logger.SetLevel(logger.TraceLevel)
+			}
 		}
 	},
 }
@@ -47,5 +54,5 @@ func init() {
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	RootCmd.PersistentFlags().Bool("debug", false, "Enable debug mode")
+	RootCmd.PersistentFlags().CountP("verbose", "v", "Verbose output (use -v, -vv, or --verbose=N)")
 }
