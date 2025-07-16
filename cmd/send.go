@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hrz6976/syncmate/db"
+	"github.com/hrz6976/syncmate/offsetfs"
 	of "github.com/hrz6976/syncmate/offsetfs"
 	"github.com/hrz6976/syncmate/rclone"
 	"github.com/hrz6976/syncmate/woc"
@@ -165,13 +165,13 @@ func runSend(
 		}
 	} else {
 		// If Mountpoint exists, clean it up
-		if err := exec.Command("fusermount3", "-u", mountpoint).Run(); err != nil {
+		if err := offsetfs.UmountExec(mountpoint); err != nil {
 			logger.WithError(err).Error("Failed to unmount existing mountpoint")
 		}
 	}
 
 	// Clean up any existing mount at this location
-	_ = exec.Command("fusermount", "-u", mountpoint).Run()
+	_ = offsetfs.UmountExec(mountpoint)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -215,14 +215,14 @@ func runSend(
 		case <-sigChan:
 			logger.Info("Received interrupt signal, cleaning up...")
 			cancel()
-			_, err := exec.Command("fusermount3", "-u", mountpoint).CombinedOutput()
+			err := offsetfs.UmountExec(mountpoint)
 			if err != nil {
 				logger.WithError(err).Error("Failed to unmount OffsetFS on interrupt")
 			}
 		case <-taskDone:
 			logger.Info("Tasks completed, cleaning up...")
 			cancel()
-			_, err := exec.Command("fusermount3", "-u", mountpoint).CombinedOutput()
+			err := offsetfs.UmountExec(mountpoint)
 			if err != nil {
 				logger.WithError(err).Error("Failed to unmount OffsetFS after tasks completed")
 			}
