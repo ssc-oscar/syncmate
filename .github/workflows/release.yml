@@ -4,13 +4,14 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   release:
-    runs-on: ubuntu-20.04  # This is intentionally set to an older version for compatibility with the build process
+    runs-on: ubuntu-20.04  # This is intentionally set to an older version for libc compatibility
     strategy:
       matrix:
         include:
@@ -18,10 +19,26 @@ jobs:
             goarch: amd64
             cc: gcc
             cgo: 1
+            tags: ""
+            suffix: ""
           - goos: linux
             goarch: arm64
             cc: aarch64-linux-gnu-gcc
             cgo: 1
+            tags: ""
+            suffix: ""
+          - goos: linux
+            goarch: amd64
+            cc: gcc
+            cgo: 1
+            tags: fuse3
+            suffix: -fuse3
+          - goos: linux
+            goarch: arm64
+            cc: aarch64-linux-gnu-gcc
+            cgo: 1
+            tags: fuse3
+            suffix: -fuse3
 
     steps:
     - uses: actions/checkout@v4
@@ -34,7 +51,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y fuse3 libfuse3-dev
+        sudo apt-get install -y libfuse-dev fuse3 libfuse3-dev
         sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
     - name: Build binary
@@ -47,24 +64,32 @@ jobs:
         VERSION="${{ github.ref_name }}"
         COMMIT_HASH_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
         BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        BINARY_NAME="syncmate-${{ matrix.goos }}-${{ matrix.goarch }}"
+        BINARY_NAME="syncmate-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
         if [ "${{ matrix.goos }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
         fi
         
-        go build -tags=fuse3 -v -ldflags="-s -w \
-          -X 'main.VERSION=${VERSION}' \
-          -X 'main.BUILD_TIME=${BUILD_TIME}' \
-          -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
-          -o "${BINARY_NAME}" .
+        if [ "${{ matrix.tags }}" != "" ]; then
+          go build -tags=${{ matrix.tags }} -v -ldflags="-s -w \
+            -X 'main.VERSION=${VERSION}' \
+            -X 'main.BUILD_TIME=${BUILD_TIME}' \
+            -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
+            -o "${BINARY_NAME}" .
+        else
+          go build -v -ldflags="-s -w \
+            -X 'main.VERSION=${VERSION}' \
+            -X 'main.BUILD_TIME=${BUILD_TIME}' \
+            -X 'main.COMMIT_HASH=${COMMIT_HASH_SHORT}'" \
+            -o "${BINARY_NAME}" .
+        fi
 
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          syncmate-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          syncmate-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}${{ matrix.goos == 'windows' && '.exe' || '' }}
         generate_release_notes: true
-        draft: false
+        draft: ${{ github.event_name == 'workflow_dispatch' }}
         prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
