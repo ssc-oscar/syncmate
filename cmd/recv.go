@@ -14,6 +14,7 @@ import (
 	"github.com/hrz6976/syncmate/rclone"
 	"github.com/hrz6976/syncmate/woc"
 	"github.com/rclone/rclone/fs"
+	"github.com/rclone/rclone/fs/operations"
 	logger "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +26,7 @@ type downloadedFileInfo struct {
 	destPath string
 }
 
-func onFileTransferred(task *woc.WocSyncTask, filePath string, destPath string) error {
+func onFileTransferred(task *woc.WocSyncTask, filePath string, destPath string, finishedCallback func(virtualPath string) error) error {
 	isPartial := strings.Contains(filePath, ".offset.")
 	copyMode := woc.CopyModeOverwrite
 	var expectedDstSizeBeforeTransfer int64
@@ -68,15 +69,20 @@ func onFileTransferred(task *woc.WocSyncTask, filePath string, destPath string) 
 		logger.WithError(err).Errorf("Failed to update task for %s", task.VirtualPath)
 		return err
 	}
+	err = finishedCallback(task.VirtualPath)
+	if err != nil {
+		logger.WithError(err).Errorf("Failed to call finished callback for %s", task.VirtualPath)
+		return err
+	}
 	return nil
 }
 
 func processDoneFiles(
 	ctx context.Context,
-	cacheDir string,
 	tasksMap map[string]*woc.WocSyncTask,
+	finishedCallback func(virtualPath string) error,
 ) error {
-	downloadedFiles, err := scanDownloadedFiles(cacheDir, tasksMap)
+	downloadedFiles, err := scanDownloadedFiles(tasksMap)
 	if err != nil {
 		return err
 	}
@@ -125,7 +131,7 @@ fileLoop:
 			default:
 			}
 
-			if err := onFileTransferred(info.task, info.filePath, info.destPath); err != nil {
+			if err := onFileTransferred(info.task, info.filePath, info.destPath, finishedCallback); err != nil {
 				logger.WithError(err).WithField("file", info.task.VirtualPath).Error("Failed to process transferred file")
 				errChan <- err
 			} else {
@@ -171,7 +177,7 @@ fileLoop:
 	return nil
 }
 
-func scanDownloadedFiles(cacheDir string, tasksMap map[string]*woc.WocSyncTask) ([]downloadedFileInfo, error) {
+func scanDownloadedFiles(tasksMap map[string]*woc.WocSyncTask) ([]downloadedFileInfo, error) {
 	var downloadedFiles []downloadedFileInfo
 
 	if cacheDir == "" {
@@ -212,7 +218,19 @@ func scanDownloadedFiles(cacheDir string, tasksMap map[string]*woc.WocSyncTask) 
 			return nil
 		}
 
-		destPath := filepath.Join(cacheDir, virtualPath)
+		var destPath string
+		if task.TargetPath != "" {
+			destPath = task.TargetPath
+		} else {
+			logger.WithField("virtualPath", virtualPath).Debug("No target path specified for task, using default destination")
+			dirPath := filepath.Join(destDir, virtualPathToSubdir(virtualPath))
+			// create destination directory if it doesn't exist
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
+				logger.WithError(err).WithField("dirPath", dirPath).Error("Failed to create destination directory")
+				return err
+			}
+			destPath = filepath.Join(dirPath, virtualPath)
+		}
 
 		// check file size
 		if info.Size() != task.Size {
@@ -255,25 +273,6 @@ func runRecv(
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// run process done files
-	if err := processDoneFiles(ctx, cacheDir, tasksMap); err != nil {
-		return err
-	}
-
-	logger.Info("Getting existing files from R2...")
-
-	// update task list
-	ignoredFilesMap := make(map[string]bool)
-	if dbHandle != nil {
-		r, err := dbHandle.ListFinishedVirtualPaths()
-		for _, v := range r {
-			ignoredFilesMap[v] = true
-		}
-		if err != nil {
-			return err
-		}
-	}
-
 	syncCtx := rclone.InjectConfig(ctx)
 	r2Creds := &rclone.CloudflareR2Credentials{
 		AccessKey: config.AccessKey,
@@ -297,6 +296,44 @@ func runRecv(
 		logger.WithError(err).Error("Failed to list files from R2")
 	}
 
+	deleteFileFunc := func(virtualPath string) error {
+		logger.WithField("virtualPath", virtualPath).Debug("Deleting file on R2")
+		fobj, err := fsrc.NewObject(syncCtx, virtualPath)
+		if err != nil {
+			logger.WithError(err).WithField("virtualPath", virtualPath).Error("Failed to get object on R2")
+			return err
+		}
+		return operations.DeleteFile(syncCtx, fobj)
+	}
+
+	// run process done files
+	if err := processDoneFiles(ctx, tasksMap, deleteFileFunc); err != nil {
+		return err
+	}
+
+	logger.Info("Getting existing files from R2...")
+
+	// update task list
+	ignoredFilesMap := make(map[string]bool)
+	if dbHandle != nil {
+		r, err := dbHandle.ListFinishedVirtualPaths()
+		for _, v := range r {
+			ignoredFilesMap[v] = true
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	// if some files are finished but not deleted on R2, run deleteFileFunc for them
+	for _, finfo := range existingFiles {
+		if _, ok := ignoredFilesMap[finfo.Name]; ok {
+			// run delete
+			deleteFileFunc(finfo.Name)
+		}
+	}
+
+	// what files need to sync?
 	fileList := make([]string, 0)
 	for _, finfo := range existingFiles {
 		// if it is ignored, skip it
@@ -347,7 +384,7 @@ func runRecv(
 	for {
 		// Run processDoneFiles (this may take a long time and cannot be interrupted)
 		logger.Debug("Running processDoneFiles")
-		if err := processDoneFiles(ctx, cacheDir, tasksMap); err != nil {
+		if err := processDoneFiles(ctx, tasksMap, deleteFileFunc); err != nil {
 			logger.WithError(err).Warn("processDoneFiles failed, will retry in next iteration")
 		}
 
@@ -356,7 +393,7 @@ func runRecv(
 		case copyErr = <-downloadDone:
 			// CopyFiles completed, do one final processing and exit
 			logger.Info("CopyFiles completed, doing final processDoneFiles")
-			if err := processDoneFiles(ctx, cacheDir, tasksMap); err != nil {
+			if err := processDoneFiles(ctx, tasksMap, deleteFileFunc); err != nil {
 				logger.WithError(err).Error("Final processDoneFiles failed")
 				if copyErr == nil {
 					copyErr = err // Only override if CopyFiles succeeded
@@ -378,6 +415,31 @@ func runRecv(
 	}
 }
 
+// find which subdirectory the virtual path belongs to
+func virtualPathToSubdir(virtualPath string) string {
+	// if it contains .idx or .bin, goes to All.blobs
+	if strings.Contains(virtualPath, ".idx") || strings.Contains(virtualPath, ".bin") {
+		return "All.blobs"
+	}
+	// if it contains .s, goes to gz
+	if strings.Contains(virtualPath, ".s") {
+		return "gz"
+	}
+	// if it starts with sha1., goes to All.sha1o
+	if strings.HasPrefix(virtualPath, "sha1.") {
+		return "All.sha1o"
+	}
+	// if it has Full in it, goes to basemaps
+	if strings.Contains(virtualPath, "Full") {
+		return "basemaps"
+	}
+	// otherwise goes to All.sha1c
+	return "All.sha1c"
+}
+
+var cacheDir string
+var destDir string
+
 var recvCmd = &cobra.Command{
 	Use:   "recv",
 	Short: "Receive files from S3-compatible storage",
@@ -387,7 +449,11 @@ var recvCmd = &cobra.Command{
 		dstPath, _ := cmd.Flags().GetString("dst")
 		configPath, _ := cmd.Flags().GetString("config")
 		skipDB, _ := cmd.Flags().GetBool("skip-db")
-		cacheDir, _ := cmd.Flags().GetString("cache-dir")
+		cacheDir, _ = cmd.Flags().GetString("cache-dir")
+		destDir, _ = cmd.Flags().GetString("dest-dir")
+		if destDir == "" {
+			destDir = cacheDir // use cacheDir as default destination directory
+		}
 
 		if srcPath == "" || dstPath == "" || configPath == "" {
 			cmd.Help()
@@ -449,6 +515,7 @@ func init() {
 	recvCmd.Flags().StringP("dst", "d", "woc.dst.json", "Woc profile of the transfer destination")
 	recvCmd.Flags().StringP("config", "c", "config.json", "Path to the configuration file")
 	recvCmd.Flags().StringP("cache-dir", "C", "", "Path to the cache directory")
+	recvCmd.Flags().StringP("dest-dir", "D", "", "Default destination directory for downloaded files. Uses cache-dir if not specified")
 	recvCmd.Flags().Bool("skip-db", false, "Skip database operations (useful for testing)")
 	recvCmd.MarkFlagRequired("cache-dir")
 	RootCmd.AddCommand(recvCmd)

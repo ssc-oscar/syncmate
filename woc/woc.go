@@ -103,6 +103,7 @@ func ParseWocProfile(profilePath *string) (*ParsedWocProfile, error) {
 
 type WocSyncTask struct {
 	of.FileConfig
+	TargetPath   string  `json:"target_path"`             // Destination path for the file
 	SourceDigest *string `json:"source_digest,omitempty"` // Source file digest for verification
 	TargetDigest *string `json:"target_digest,omitempty"` // Target file digest for verification
 }
@@ -130,13 +131,17 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 		}
 	}
 
-	addFullCopyTask := func(srcFile WocFile) {
+	addFullCopyTask := func(srcFile WocFile, dstFile *WocFile) {
 		virtualPath := filepath.Base(srcFile.Path)
 		if srcFile.Size == nil {
 			panic(fmt.Errorf("shard size is nil for file %s", srcFile.Path))
 		}
 		if srcFile.Digest == nil {
 			calcDigests(srcFile)
+		}
+		var tarPath string
+		if dstFile != nil {
+			tarPath = dstFile.Path
 		}
 		fileList[virtualPath] = &WocSyncTask{
 			FileConfig: of.FileConfig{
@@ -145,6 +150,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 				Offset:      0,
 				Size:        int64(*srcFile.Size),
 			},
+			TargetPath:   tarPath,        // Destination path for the file
 			SourceDigest: srcFile.Digest, // Source digest for verification
 			TargetDigest: nil,            // Target digest does not matter
 		}
@@ -158,7 +164,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 		if *srcFile.Size < *dstFile.Size {
 			logger.Warn(fmt.Sprintf("source file %s size %d is smaller than destination file %s size %d",
 				srcFile.Path, *srcFile.Size, dstFile.Path, *dstFile.Size))
-			addFullCopyTask(srcFile)
+			addFullCopyTask(srcFile, &dstFile)
 			return
 		}
 		if srcFile.Digest == nil {
@@ -177,6 +183,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 				Offset:      int64(*dstFile.Size),
 				Size:        int64(*srcFile.Size) - int64(*dstFile.Size),
 			},
+			TargetPath:   dstFile.Path, // Destination path for the file
 			SourceDigest: srcFile.Digest,
 			TargetDigest: dstFile.Digest,
 		}
@@ -195,7 +202,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 			}
 			shards := append(v.Shards, largesSlice...)
 			for _, shard := range shards {
-				addFullCopyTask(shard)
+				addFullCopyTask(shard, nil)
 			}
 		}
 	}
@@ -203,14 +210,14 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 		oldMap, exists := dstProfile.Objects[k]
 		for i, shard := range v.Shards {
 			if !exists {
-				addFullCopyTask(shard)
+				addFullCopyTask(shard, nil)
 				continue
 			}
 			oldShard := oldMap.Shards[i]
 			if *oldShard.Size > *shard.Size {
 				logger.Warn(fmt.Sprintf("source file %s size %d is smaller than destination file %s size %d",
 					shard.Path, *shard.Size, oldShard.Path, *oldShard.Size))
-				addFullCopyTask(shard)
+				addFullCopyTask(shard, &oldShard)
 				continue
 			}
 
@@ -219,7 +226,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 			// File will be copied in full if the file exists on the remote.
 			if skipPartDigestCheck {
 				logger.Debug("Skipping digest check", "path", shard.Path)
-				addFullCopyTask(shard)
+				addFullCopyTask(shard, &oldShard)
 			} else {
 				partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
 				if err != nil {
@@ -234,7 +241,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 				if partialMd5.Digest != *oldShard.Digest {
 					logger.Debug(fmt.Sprintf("partial MD5 mismatch for shard %s: %s != %s",
 						shard.Path, partialMd5.Digest, *oldShard.Digest))
-					addFullCopyTask(shard)
+					addFullCopyTask(shard, &oldShard)
 					continue
 				}
 			}
