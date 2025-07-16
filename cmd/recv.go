@@ -423,7 +423,7 @@ var recvCmd = &cobra.Command{
 			}
 		}
 
-		tasksMap, err := generateTasks(srcProfile, dstProfile)
+		tasksMap, err := generateTasks(srcProfile, dstProfile, true)
 		if err != nil {
 			cmd.PrintErrf("Failed to generate tasks: %v\n", err)
 			return

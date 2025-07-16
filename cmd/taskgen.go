@@ -60,7 +60,7 @@ var taskCmd = &cobra.Command{
 			return
 		}
 
-		fileList := woc.GenerateFileLists(dstProfile, srcProfile)
+		fileList := woc.GenerateFileLists(dstProfile, srcProfile, false)
 
 		if err := writeFileListToJSONL(fileList, outputPath); err != nil {
 			cmd.PrintErrf("Failed to write file list to %s: %v\n", outputPath, err)

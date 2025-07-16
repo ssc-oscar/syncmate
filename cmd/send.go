@@ -74,8 +74,9 @@ func connectDB() (*db.DB, error) {
 
 func generateTasks(
 	srcProfile,
-	dstProfile *woc.ParsedWocProfile) (map[string]*woc.WocSyncTask, error) {
-	tasksMap := woc.GenerateFileLists(dstProfile, srcProfile)
+	dstProfile *woc.ParsedWocProfile,
+	skipPartDigestCheck bool) (map[string]*woc.WocSyncTask, error) {
+	tasksMap := woc.GenerateFileLists(dstProfile, srcProfile, skipPartDigestCheck)
 	var finishedFiles []string
 	var err error
 	if dbHandle != nil {
@@ -107,6 +108,9 @@ func generateTasks(
 		}
 
 		if isOnNFS, err := isFileOnNFS(task.SourcePath); err != nil {
+			if skipPartDigestCheck { // file should not exist
+				continue
+			}
 			return nil, err
 		} else if isOnNFS {
 			// Skip tasks for files on NFS
@@ -384,7 +388,7 @@ var sendCmd = &cobra.Command{
 			}
 		}
 
-		tasksMap, err := generateTasks(srcProfile, dstProfile)
+		tasksMap, err := generateTasks(srcProfile, dstProfile, false)
 		if err != nil {
 			cmd.PrintErrf("Failed to generate tasks: %v\n", err)
 			return

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"testing"
 
 	of "github.com/hrz6976/syncmate/offsetfs" // Assuming offsetfs is the package where WocFile, WocObject, WocMap, and WocProfile are defined
 	logger "github.com/sirupsen/logrus"
@@ -109,7 +108,7 @@ type WocSyncTask struct {
 }
 
 // produce file lists by comparing two WocProfile objects
-func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*WocSyncTask {
+func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestCheck bool) map[string]*WocSyncTask {
 	var fileList = make(map[string]*WocSyncTask)
 
 	calcDigests := func(file WocFile) {
@@ -215,9 +214,12 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 				continue
 			}
 
-			// Skip digest check in tests or CI environments
-			if testing.Testing() {
-				logger.Debug("Skipping digest check in test mode", "path", shard.Path)
+			// On the destination, we can never check the digest of source files.
+			// So it adds both the full copy and the partial copy tasks.
+			// File will be copied in full if the file exists on the remote.
+			if skipPartDigestCheck {
+				logger.Debug("Skipping digest check", "path", shard.Path)
+				addFullCopyTask(shard)
 			} else {
 				partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
 				if err != nil {
