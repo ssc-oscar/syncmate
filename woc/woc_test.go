@@ -34,7 +34,7 @@ func TestGenerateFileList(t *testing.T) {
 
 	fileList := GenerateFileLists(dstProfile, srcProfile)
 	// dump the file list to json
-	_, err := json.MarshalIndent(fileList, "", "  ")
+	_, err = json.MarshalIndent(fileList, "", "  ")
 	if err != nil {
 		t.Fatalf("Failed to marshal file list: %v", err)
 	}
