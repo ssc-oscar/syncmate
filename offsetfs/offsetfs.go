@@ -408,7 +408,6 @@ func MountOffsetFS(opt MountOptions) error {
 	// 设置挂载选项
 	options := []string{
 		"-o", "fsname=offsetfs",
-		"-o", "volname=OffsetFS",
 	}
 
 	if opt.AllowOther {
