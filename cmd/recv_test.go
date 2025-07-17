@@ -36,18 +36,21 @@ func TestScanDownloadedFiles(t *testing.T) {
 			FileConfig: offsetfs.FileConfig{
 				VirtualPath: "file1.txt",
 				SourcePath:  "/source/file1.txt",
+				Size:        17,
 			},
 		},
 		"subdir/file2.txt": {
 			FileConfig: offsetfs.FileConfig{
 				VirtualPath: "subdir/file2.txt",
 				SourcePath:  "/source/subdir/file2.txt",
+				Size:        17,
 			},
 		},
 		"file3.offset.1024": {
 			FileConfig: offsetfs.FileConfig{
 				VirtualPath: "file3.offset.1024",
 				SourcePath:  "/source/file3.txt",
+				Size:        15,
 			},
 		},
 	}
