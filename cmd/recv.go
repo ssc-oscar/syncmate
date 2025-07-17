@@ -414,13 +414,13 @@ func runRecv(
 			logger.Info("Upload cancelled by user interrupt")
 			return fmt.Errorf("upload cancelled by user interrupt")
 		default:
-			logger.Info("CopyFiles still running, continuing processing loop after 2 minutes")
-			// Sleep interruptible for 2 minute
+			logger.Info("CopyFiles still running, continuing processing loop after 5 minutes")
+			// Sleep interruptible for 5 minutes
 			select {
 			case <-ctx.Done():
 				logger.Info("Upload cancelled by user interrupt")
 				return fmt.Errorf("upload cancelled by user interrupt")
-			case <-time.After(2 * time.Minute):
+			case <-time.After(5 * time.Minute):
 				// Continue processing loop
 			}
 		}
