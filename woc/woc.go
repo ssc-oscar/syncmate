@@ -65,6 +65,34 @@ type ParsedWocProfile struct {
 	Objects map[string]WocObject `json:"objects"`
 }
 
+// quirk on da* servers: resolve /da?_data to /data on da?.eecs.utk.edu
+// the NFS trick does not work anymore because /da?_data are mounted as NFS
+func RelocatePath(fname *string) error {
+	hostName, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+	if fname == nil || *fname == "" {
+		return fmt.Errorf("file name cannot be empty")
+	}
+	shortHostName := strings.Split(hostName, ".")[0]
+	if shortHostName == "ishia" {
+		shortHostName = "da7" // treat ishia as da7 for compatibility
+	}
+	if strings.HasPrefix(*fname, "/"+shortHostName) {
+		switch shortHostName {
+		case "da8":
+			*fname = "/mnt/ordos/data/data" + strings.TrimPrefix(*fname, "/da8_data")
+		case "da7":
+			*fname = "/corrino" + strings.TrimPrefix(*fname, "/da7_data")
+		default:
+			*fname = "/" + strings.TrimPrefix(*fname, "/"+shortHostName+"_")
+		}
+		logger.WithField("file", *fname).Debugf("Resolved source path to %s", *fname)
+	}
+	return nil
+}
+
 func ParseWocProfile(profilePath *string) (*ParsedWocProfile, error) {
 	// Read the JSON file
 	data, err := os.ReadFile(*profilePath)
@@ -220,6 +248,12 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 					shard.Path, *shard.Size, oldShard.Path, *oldShard.Size))
 				addFullCopyTask(shard, &oldShard)
 				continue
+			}
+
+			// rewrite shard.Path to the full path
+			if err := RelocatePath(&shard.Path); err != nil {
+				logger.WithField("path", shard.Path).WithError(err).Error("Failed to relocate path")
+				panic(err)
 			}
 
 			// On the destination, we can never check the digest of source files.

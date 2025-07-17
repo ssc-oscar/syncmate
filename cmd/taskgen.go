@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"os"
-	"strings"
 	"syscall"
 
 	"github.com/hrz6976/syncmate/woc"
@@ -81,28 +80,6 @@ func generateTasks(
 		if task.VirtualPath != "" && finishedFilesMap[task.VirtualPath] {
 			logger.WithField("file", task.VirtualPath).Debug("Skipping already finished task")
 			delete(tasksMap, task.VirtualPath)
-		}
-
-		// quirk on da* servers: resolve /da?_data to /data on da?.eecs.utk.edu
-		// the NFS trick does not work anymore because /da?_data are mounted as NFS
-		hostName, err := os.Hostname()
-		if err != nil {
-			return nil, err
-		}
-		shortHostName := strings.Split(hostName, ".")[0]
-		if shortHostName == "ishia" {
-			shortHostName = "da7" // treat ishia as da7 for compatibility
-		}
-		if strings.HasPrefix(task.SourcePath, "/"+shortHostName) {
-			switch shortHostName {
-			case "da8":
-				task.SourcePath = "/mnt/ordos/data/data/" + strings.TrimPrefix(task.SourcePath, "/da8_data")
-			case "da7":
-				task.SourcePath = "/corrino/" + strings.TrimPrefix(task.SourcePath, "/da7_data")
-			default:
-				task.SourcePath = "/" + strings.TrimPrefix(task.SourcePath, "/"+shortHostName+"_")
-			}
-			logger.WithField("file", task.VirtualPath).Debugf("Resolved source path to %s", task.SourcePath)
 		}
 
 		if isLocal, err := isFileLocal(task.SourcePath); err != nil {
