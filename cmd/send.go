@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -21,26 +20,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/winfsp/cgofuse/fuse"
 )
-
-const NFS_SUPER_MAGIC = 0x6969
-
-func isFileOnNFS(filePath string) (bool, error) {
-	var statfs syscall.Statfs_t
-
-	err := syscall.Statfs(filePath, &statfs)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, fmt.Errorf("file does not exist: %s", filePath)
-		}
-		return false, fmt.Errorf("failed to get file system info for %s: %w", filePath, err)
-	}
-
-	if statfs.Type == NFS_SUPER_MAGIC {
-		return true, nil
-	}
-
-	return false, nil
-}
 
 type CloudflareCredentials struct {
 	// Explicitly define the fields to avoid duplicate json tags
@@ -70,56 +49,6 @@ func connectDB() (*db.DB, error) {
 	}
 	dbHandle = db.NewDB(gormDB)
 	return dbHandle, nil
-}
-
-func generateTasks(
-	srcProfile,
-	dstProfile *woc.ParsedWocProfile,
-	skipPartDigestCheck bool) (map[string]*woc.WocSyncTask, error) {
-	tasksMap := woc.GenerateFileLists(dstProfile, srcProfile, skipPartDigestCheck)
-	var finishedFiles []string
-	var err error
-	if dbHandle != nil {
-		finishedFiles, err = dbHandle.ListFinishedVirtualPaths()
-		if err != nil {
-			return nil, err
-		}
-	}
-	finishedFilesMap := make(map[string]bool)
-	for _, file := range finishedFiles {
-		finishedFilesMap[file] = true
-	}
-	for _, task := range tasksMap {
-		if task.VirtualPath != "" && finishedFilesMap[task.VirtualPath] {
-			logger.WithField("file", task.VirtualPath).Debug("Skipping already finished task")
-			delete(tasksMap, task.VirtualPath)
-		}
-
-		// quirk on da* servers: resolve /da?_data to /data on da?.eecs.utk.edu
-		// the NFS trick does not work anymore because /da?_data are mounted as NFS
-		hostName, err := os.Hostname()
-		if err != nil {
-			return nil, err
-		}
-		shortHostName := strings.Split(hostName, ".")[0]
-		if strings.HasPrefix(task.SourcePath, "/"+shortHostName) {
-			task.SourcePath = "/" + strings.TrimPrefix(task.SourcePath, "/"+shortHostName+"_")
-			logger.WithField("file", task.VirtualPath).Debugf("Resolved source path to %s", task.SourcePath)
-		}
-
-		if isOnNFS, err := isFileOnNFS(task.SourcePath); err != nil {
-			if skipPartDigestCheck { // file should not exist
-				continue
-			}
-			return nil, err
-		} else if isOnNFS {
-			// Skip tasks for files on NFS
-			logger.WithField("file", task.SourcePath).Debug("Skipping task for file on NFS")
-			delete(tasksMap, task.VirtualPath)
-			continue
-		}
-	}
-	return tasksMap, nil
 }
 
 func runSend(
@@ -388,7 +317,7 @@ var sendCmd = &cobra.Command{
 			}
 		}
 
-		tasksMap, err := generateTasks(srcProfile, dstProfile, false)
+		tasksMap, err := generateTasks(srcProfile, dstProfile)
 		if err != nil {
 			cmd.PrintErrf("Failed to generate tasks: %v\n", err)
 			return

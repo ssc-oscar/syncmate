@@ -109,7 +109,7 @@ type WocSyncTask struct {
 }
 
 // produce file lists by comparing two WocProfile objects
-func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestCheck bool) map[string]*WocSyncTask {
+func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*WocSyncTask {
 	var fileList = make(map[string]*WocSyncTask)
 
 	calcDigests := func(file WocFile) {
@@ -224,15 +224,16 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile, skipPartDigestC
 			// On the destination, we can never check the digest of source files.
 			// So it adds both the full copy and the partial copy tasks.
 			// File will be copied in full if the file exists on the remote.
-			if skipPartDigestCheck {
-				logger.Debug("Skipping digest check", "path", shard.Path)
-				addFullCopyTask(shard, &oldShard)
-			} else {
-				partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
-				if err != nil {
+			partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
+			if err != nil {
+				if os.IsNotExist(err) {
+					logger.Debug("Source file missing. Add both full and partial tasks and skip digest verification.", "path", shard.Path)
+					addFullCopyTask(shard, &oldShard)
+				} else {
 					logger.WithError(err).WithField("path", shard.Path).Error("Failed to calculate sample MD5")
 					panic(err)
 				}
+			} else { // here we have a valid partial MD5
 				logger.WithFields(logger.Fields{
 					"path":   shard.Path,
 					"size":   *shard.Size,

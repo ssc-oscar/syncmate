@@ -32,7 +32,7 @@ func TestGenerateFileList(t *testing.T) {
 		t.Fatalf("Failed to parse source profile: %v", err)
 	}
 
-	fileList := GenerateFileLists(dstProfile, srcProfile, true)
+	fileList := GenerateFileLists(dstProfile, srcProfile)
 	// dump the file list to json
 	_, err = json.MarshalIndent(fileList, "", "  ")
 	if err != nil {
