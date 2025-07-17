@@ -200,6 +200,12 @@ func scanDownloadedFiles(tasksMap map[string]*woc.WocSyncTask) ([]downloadedFile
 			return nil
 		}
 
+		// if the file name ends with .partial, skip it
+		if strings.HasSuffix(info.Name(), ".partial") {
+			logger.WithField("file", filePath).Debug("Skipping partial file")
+			return nil
+		}
+
 		relPath, err := filepath.Rel(cacheDir, filePath)
 		if err != nil {
 			logger.WithError(err).WithField("filePath", filePath).Warn("Failed to calculate relative path")
