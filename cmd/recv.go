@@ -267,6 +267,7 @@ func scanDownloadedFiles(tasksMap map[string]*woc.WocSyncTask) ([]downloadedFile
 func runRecv(
 	cacheDir string,
 	tasksMap map[string]*woc.WocSyncTask,
+	deleteRemote bool,
 ) error {
 	var err error
 
@@ -298,13 +299,18 @@ func runRecv(
 	}
 
 	deleteFileFunc := func(virtualPath string) error {
-		logger.WithField("virtualPath", virtualPath).Debug("Deleting file on R2")
-		fobj, err := fsrc.NewObject(syncCtx, virtualPath)
-		if err != nil {
-			logger.WithError(err).WithField("virtualPath", virtualPath).Error("Failed to get object on R2")
-			return err
+		return nil
+	}
+	if deleteRemote {
+		deleteFileFunc = func(virtualPath string) error {
+			logger.WithField("virtualPath", virtualPath).Debug("Deleting file on R2")
+			fobj, err := fsrc.NewObject(syncCtx, virtualPath)
+			if err != nil {
+				logger.WithError(err).WithField("virtualPath", virtualPath).Error("Failed to get object on R2")
+				return err
+			}
+			return operations.DeleteFile(syncCtx, fobj)
 		}
-		return operations.DeleteFile(syncCtx, fobj)
 	}
 
 	// run process done files
@@ -449,6 +455,8 @@ var recvCmd = &cobra.Command{
 		skipDB, _ := cmd.Flags().GetBool("skip-db")
 		cacheDir, _ = cmd.Flags().GetString("cache-dir")
 		destDir, _ = cmd.Flags().GetString("dest-dir")
+		deleteRemote, _ := cmd.Flags().GetBool("delete-remote")
+
 		if destDir == "" {
 			destDir = cacheDir // use cacheDir as default destination directory
 		}
@@ -496,7 +504,7 @@ var recvCmd = &cobra.Command{
 		logger.WithField("taskCount", len(tasksMap)).Info("Generated tasks for file transfer")
 
 		if len(tasksMap) > 0 {
-			if err := runRecv(cacheDir, tasksMap); err != nil {
+			if err := runRecv(cacheDir, tasksMap, deleteRemote); err != nil {
 				cmd.PrintErrf("Failed to run file transfer: %v\n", err)
 				return
 			}
@@ -515,6 +523,7 @@ func init() {
 	recvCmd.Flags().StringP("cache-dir", "C", "", "Path to the cache directory")
 	recvCmd.Flags().StringP("dest-dir", "D", "", "Default destination directory for downloaded files. Uses cache-dir if not specified")
 	recvCmd.Flags().Bool("skip-db", false, "Skip database operations (useful for testing)")
+	recvCmd.Flags().Bool("delete-remote", true, "Delete files on remote after download")
 	recvCmd.MarkFlagRequired("cache-dir")
 	RootCmd.AddCommand(recvCmd)
 }
