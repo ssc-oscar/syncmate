@@ -94,7 +94,7 @@ func generateTasks(
 			switch shortHostName {
 			case "da8":
 				task.SourcePath = "/mnt/ordos/data/data/" + strings.TrimPrefix(task.SourcePath, "/da8_data")
-			case "da7":
+			case "ishia":
 				task.SourcePath = "/corrino/" + strings.TrimPrefix(task.SourcePath, "/da7_data")
 			default:
 				task.SourcePath = "/" + strings.TrimPrefix(task.SourcePath, "/"+shortHostName+"_")
