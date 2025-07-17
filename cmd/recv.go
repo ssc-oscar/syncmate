@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hrz6976/syncmate/db"
 	"github.com/hrz6976/syncmate/rclone"
@@ -166,7 +167,7 @@ fileLoop:
 
 	if len(errs) > 0 {
 		logger.WithField("errorCount", len(errs)).Error("Some files failed to process")
-		return errs[0]
+		return nil
 	}
 
 	if cancelled {
@@ -413,8 +414,15 @@ func runRecv(
 			logger.Info("Upload cancelled by user interrupt")
 			return fmt.Errorf("upload cancelled by user interrupt")
 		default:
-			// CopyFiles still running, continue processing loop
-			logger.Debug("CopyFiles still running, continuing processing loop")
+			logger.Info("CopyFiles still running, continuing processing loop after 2 minutes")
+			// Sleep interruptible for 2 minute
+			select {
+			case <-ctx.Done():
+				logger.Info("Upload cancelled by user interrupt")
+				return fmt.Errorf("upload cancelled by user interrupt")
+			case <-time.After(2 * time.Minute):
+				// Continue processing loop
+			}
 		}
 	}
 }

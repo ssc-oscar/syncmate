@@ -34,10 +34,11 @@ func InjectConfig(
 	ci.AskPassword = false
 	ci.LogLevel = fs.LogLevelDebug
 	ci.StatsLogLevel = fs.LogLevelDebug
-	ci.Retries = 10
+	ci.Retries = 5
 	ci.LowLevelRetries = 100
 	ci.NoTraverse = true
 	ci.StatsOneLine = true
+	ci.MultiThreadChunkSize = fs.Mebi * 500 // 500 MiB chunk size
 	// ctx = injectFileList(ctx, files)
 	accounting.Start(ctx)
 	// // This is kinda stupid: rclone reads log level from an empty context
