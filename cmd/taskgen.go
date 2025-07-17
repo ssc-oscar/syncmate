@@ -90,11 +90,14 @@ func generateTasks(
 			return nil, err
 		}
 		shortHostName := strings.Split(hostName, ".")[0]
+		if shortHostName == "ishia" {
+			shortHostName = "da7" // treat ishia as da7 for compatibility
+		}
 		if strings.HasPrefix(task.SourcePath, "/"+shortHostName) {
 			switch shortHostName {
 			case "da8":
 				task.SourcePath = "/mnt/ordos/data/data/" + strings.TrimPrefix(task.SourcePath, "/da8_data")
-			case "ishia":
+			case "da7":
 				task.SourcePath = "/corrino/" + strings.TrimPrefix(task.SourcePath, "/da7_data")
 			default:
 				task.SourcePath = "/" + strings.TrimPrefix(task.SourcePath, "/"+shortHostName+"_")
