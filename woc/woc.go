@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	of "github.com/hrz6976/syncmate/offsetfs" // Assuming offsetfs is the package where WocFile, WocObject, WocMap, and WocProfile are defined
 	logger "github.com/sirupsen/logrus"
@@ -226,7 +227,7 @@ func GenerateFileLists(dstProfile, srcProfile *ParsedWocProfile) map[string]*Woc
 			// File will be copied in full if the file exists on the remote.
 			partialMd5, err := SampleMD5(shard.Path, 0, int64(*oldShard.Size))
 			if err != nil {
-				if os.IsNotExist(err) {
+				if os.IsNotExist(err) || strings.Contains(err.Error(), "no such file or directory") {
 					logger.Debug("Source file missing. Add both full and partial tasks and skip digest verification.", "path", shard.Path)
 					addFullCopyTask(shard, &oldShard)
 				} else {

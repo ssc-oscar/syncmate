@@ -91,7 +91,14 @@ func generateTasks(
 		}
 		shortHostName := strings.Split(hostName, ".")[0]
 		if strings.HasPrefix(task.SourcePath, "/"+shortHostName) {
-			task.SourcePath = "/" + strings.TrimPrefix(task.SourcePath, "/"+shortHostName+"_")
+			switch shortHostName {
+			case "da8":
+				task.SourcePath = "/mnt/ordos/data/data/" + strings.TrimPrefix(task.SourcePath, "/da8_data")
+			case "da7":
+				task.SourcePath = "/corrino/" + strings.TrimPrefix(task.SourcePath, "/da7_data")
+			default:
+				task.SourcePath = "/" + strings.TrimPrefix(task.SourcePath, "/"+shortHostName+"_")
+			}
 			logger.WithField("file", task.VirtualPath).Debugf("Resolved source path to %s", task.SourcePath)
 		}
 
