@@ -39,28 +39,32 @@ func writeFileListToJSONL(fileList map[string]*woc.WocSyncTask, outputPath strin
 
 const NFS_SUPER_MAGIC = 0x6969
 
-func isFileIgnored(filePath string) (bool, error) {
+func isFileLocal(filePath string) (bool, error) {
 	var statfs syscall.Statfs_t
 
 	err := syscall.Statfs(filePath, &statfs)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return true, nil // File does not exist, treat as ignored
+			return false, nil // File does not exist, treat as non-local
 		}
+		// Other errors are unexpected, return them
 		return false, err
 	}
 
 	if statfs.Type == NFS_SUPER_MAGIC {
-		return true, nil
+		return false, nil
 	}
 
-	return false, nil
+	return true, nil
 }
 
 func generateTasks(
 	srcProfile,
-	dstProfile *woc.ParsedWocProfile) (map[string]*woc.WocSyncTask, error) {
+	dstProfile *woc.ParsedWocProfile,
+	localOnly bool,
+) (map[string]*woc.WocSyncTask, error) {
 	tasksMap := woc.GenerateFileLists(dstProfile, srcProfile)
+	logger.WithField("taskCount", len(tasksMap)).Debug("Generated tasks for file transfer")
 	var finishedFiles []string
 	var err error
 	if dbHandle != nil {
@@ -91,9 +95,9 @@ func generateTasks(
 			logger.WithField("file", task.VirtualPath).Debugf("Resolved source path to %s", task.SourcePath)
 		}
 
-		if isIgnored, err := isFileIgnored(task.SourcePath); err != nil {
+		if isLocal, err := isFileLocal(task.SourcePath); err != nil {
 			return nil, err
-		} else if isIgnored {
+		} else if !isLocal && localOnly {
 			// Skip tasks for files on NFS
 			logger.WithField("file", task.SourcePath).Debug("File ignored")
 			delete(tasksMap, task.VirtualPath)
@@ -126,19 +130,12 @@ var taskCmd = &cobra.Command{
 		}
 
 		var fileList map[string]*woc.WocSyncTask
-		if localOnly {
-			fileList, err = generateTasks(srcProfile, dstProfile)
-			if err != nil {
-				cmd.PrintErrf("Failed to generate tasks: %v\n", err)
-				return
-			}
-		} else {
-			fileList = woc.GenerateFileLists(dstProfile, srcProfile)
+		fileList, err = generateTasks(srcProfile, dstProfile, localOnly)
+		if err != nil {
+			panic(err)
 		}
-
 		if err := writeFileListToJSONL(fileList, outputPath); err != nil {
-			cmd.PrintErrf("Failed to write file list to %s: %v\n", outputPath, err)
-			return
+			panic(err)
 		}
 	},
 }
