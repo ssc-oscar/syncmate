@@ -139,6 +139,39 @@ syncmate recv [flags]
 syncmate recv --src woc.src.json --dst woc.dst.json --config config.json --cache-dir /tmp/cache
 ```
 
+### `syncmate status`
+
+Show transfer progress and statistics.
+
+**Usage:**
+```bash
+syncmate status [flags]
+```
+
+**Flags:**
+- `-c, --config`: Path to the configuration file (default: "config.json")
+- `--skip-db`: Skip database operations
+
+**Description:**
+This command displays a comprehensive overview of the transfer status, including:
+- Database statistics: Count and total size of files by status (Uploading, Uploaded, Downloaded)
+- R2 backend statistics: Total number of files and their combined size in the R2 bucket
+
+The output is formatted in a table-like structure for easy reading.
+
+**Example:**
+```bash
+syncmate status --config config.json
+```
+
+**Sample Output:**
+```
+Status       Count    Total Size  
+------       -----    ----------  
+Uploading    510      80.9 TiB    
+Downloaded   250      9.9 TiB     
+Uploaded     2893     50.7 TiB  
+
 ### `syncmate mount`
 
 Mount the OffsetFS file system.

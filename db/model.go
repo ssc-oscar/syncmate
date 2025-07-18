@@ -15,6 +15,26 @@ const (
 	Failed
 )
 
+// convert Status to string
+func (s Status) String() string {
+	switch s {
+	case Pending:
+		return "Pending"
+	case Uploading:
+		return "Uploading"
+	case Uploaded:
+		return "Uploaded"
+	case Downloading:
+		return "Downloading"
+	case Downloaded:
+		return "Downloaded"
+	case Failed:
+		return "Failed"
+	default:
+		return "Unknown"
+	}
+}
+
 type Task struct {
 	gorm.Model
 	/* VirtualPath is the path in the S3 bucket and the virual file system.

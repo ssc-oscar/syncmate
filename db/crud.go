@@ -20,6 +20,8 @@ type DBOperation interface {
 	ListTasks(offset, limit int) ([]*Task, error)
 	// CountTasks returns the total number of tasks in the database.
 	CountTasks() (int64, error)
+	// GetTasksByStatus returns count and total size of tasks by status.
+	GetTasksByStatus(status Status) (*StatusSummary, error)
 }
 
 // DB is the concrete implementation of DBOperation
@@ -86,6 +88,24 @@ func (db *DB) CountTasks() (int64, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+// StatusSummary represents statistics for tasks by status
+type StatusSummary struct {
+	Count int64
+	Size  int64
+}
+
+// GetTasksByStatus returns count and total size of tasks by status
+func (db *DB) GetTasksByStatus(status Status) (*StatusSummary, error) {
+	var summary StatusSummary
+	if err := db.getConnection().Model(&Task{}).
+		Where("status = ?", status).
+		Select("COUNT(*) as count, COALESCE(SUM(src_size), 0) as size").
+		Scan(&summary).Error; err != nil {
+		return nil, err
+	}
+	return &summary, nil
 }
 
 // NewDB creates a new DB instance with the given gorm.DB connection
