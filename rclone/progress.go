@@ -16,7 +16,7 @@ import (
 
 const (
 	// interval between progress prints
-	defaultProgressInterval = 500 * time.Millisecond
+	defaultProgressInterval = 1 * time.Second
 )
 
 // startProgress starts the progress bar printing
