@@ -1,4 +1,4 @@
-# 🔄 SyncMate 🌍
+# 🔁 SyncMate 🌍
 
 SyncMate is a tool for incrementally transfer the World of Code dataset to another machine (even in another continent). It uses Cloudflare R2 as the fast, affordable alternative to the shockingly expensive internet acceleration services in China. It is designed to mount the delta of the dataset to virtual filesystems, upload simultaneously, and download files in parallel. The global state is tracked in a Cloudflare D1 database to allow resumable uploads and downloads.
 
@@ -171,6 +171,7 @@ Status       Count    Total Size
 Uploading    510      80.9 TiB    
 Downloaded   250      9.9 TiB     
 Uploaded     2893     50.7 TiB  
+```
 
 ### `syncmate mount`
 
