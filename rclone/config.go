@@ -34,7 +34,7 @@ func InjectConfig(
 	ci.AskPassword = false
 	ci.LogLevel = fs.LogLevelDebug
 	ci.StatsLogLevel = fs.LogLevelDebug
-	ci.Retries = 5
+	ci.Retries = 0
 	ci.LowLevelRetries = 100
 	ci.NoTraverse = true
 	ci.StatsOneLine = true
