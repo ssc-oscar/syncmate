@@ -39,6 +39,32 @@ func onFileTransferred(task *woc.WocSyncTask, filePath string, destPath string, 
 				expectedDstSizeBeforeTransfer = size
 			}
 		}
+		// Recover from unexpected interrupts
+		var dstSize int64
+		if stat, err := os.Stat(destPath); err != nil {
+			logger.WithError(err).Errorf("Failed to stat destination file %s", destPath)
+			return err
+		} else {
+			dstSize = stat.Size()
+		}
+		if dstSize > expectedDstSizeBeforeTransfer {
+			// calculate sample md5
+			dstPartMd5, err := woc.SampleMD5(destPath, 0, expectedDstSizeBeforeTransfer)
+			if err != nil {
+				logger.WithError(err).Errorf("Failed to calculate sample md5 for destination file %s", destPath)
+				return err
+			}
+			if task.TargetDigest != nil && dstPartMd5.Digest == *task.TargetDigest {
+				logger.Warnf("Recovering from unexpected interrupt, destination file md5: %s, expected size: %d, current size: %d", dstPartMd5.Digest, expectedDstSizeBeforeTransfer, dstSize)
+				// trunc file
+				if err := os.Truncate(destPath, expectedDstSizeBeforeTransfer); err != nil {
+					logger.WithError(err).Errorf("Failed to truncate destination file %s", destPath)
+					return err
+				}
+			} else {
+				logger.Warnf("Destination file md5 mismatch, expected: %s, got: %s", *task.TargetDigest, dstPartMd5.Digest)
+			}
+		}
 	}
 	var sourceDigest string
 	if task.SourceDigest != nil {
